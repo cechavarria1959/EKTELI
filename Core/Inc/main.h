@@ -67,8 +67,8 @@ void Error_Handler(void);
 #define DCHG_GPIO_Port GPIOA
 #define DFETOFF_Pin GPIO_PIN_3
 #define DFETOFF_GPIO_Port GPIOA
-#define TP4_Pin GPIO_PIN_4
-#define TP4_GPIO_Port GPIOA
+#define TP4_DAC_Pin GPIO_PIN_4
+#define TP4_DAC_GPIO_Port GPIOA
 #define SPI_SCK_Pin GPIO_PIN_5
 #define SPI_SCK_GPIO_Port GPIOA
 #define SPI_MISO_Pin GPIO_PIN_6
