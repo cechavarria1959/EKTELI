@@ -56,37 +56,41 @@ const osThreadAttr_t defaultTask_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for myTask02 */
-osThreadId_t myTask02Handle;
-const osThreadAttr_t myTask02_attributes = {
-  .name = "myTask02",
+/* Definitions for BMSMonitor */
+osThreadId_t BMSMonitorHandle;
+const osThreadAttr_t BMSMonitor_attributes = {
+  .name = "BMSMonitor",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for FuelGaugeMonitor */
+osThreadId_t FuelGaugeMonitorHandle;
+const osThreadAttr_t FuelGaugeMonitor_attributes = {
+  .name = "FuelGaugeMonitor",
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
-/* Definitions for myQueue01 */
-osMessageQueueId_t myQueue01Handle;
-const osMessageQueueAttr_t myQueue01_attributes = {
-  .name = "myQueue01"
+/* Definitions for CANMonitor */
+osThreadId_t CANMonitorHandle;
+const osThreadAttr_t CANMonitor_attributes = {
+  .name = "CANMonitor",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityLow,
 };
-/* Definitions for myTimer01 */
-osTimerId_t myTimer01Handle;
-const osTimerAttr_t myTimer01_attributes = {
-  .name = "myTimer01"
+/* Definitions for CANQueue */
+osMessageQueueId_t CANQueueHandle;
+const osMessageQueueAttr_t CANQueue_attributes = {
+  .name = "CANQueue"
 };
-/* Definitions for Mutex1 */
-osMutexId_t Mutex1Handle;
-const osMutexAttr_t Mutex1_attributes = {
-  .name = "Mutex1"
+/* Definitions for mutex_01 */
+osMutexId_t mutex_01Handle;
+const osMutexAttr_t mutex_01_attributes = {
+  .name = "mutex_01"
 };
-/* Definitions for myBinarySem01 */
-osSemaphoreId_t myBinarySem01Handle;
-const osSemaphoreAttr_t myBinarySem01_attributes = {
-  .name = "myBinarySem01"
-};
-/* Definitions for Semaphore_Cnt */
-osSemaphoreId_t Semaphore_CntHandle;
-const osSemaphoreAttr_t Semaphore_Cnt_attributes = {
-  .name = "Semaphore_Cnt"
+/* Definitions for semaphore_1 */
+osSemaphoreId_t semaphore_1Handle;
+const osSemaphoreAttr_t semaphore_1_attributes = {
+  .name = "semaphore_1"
 };
 /* USER CODE BEGIN PV */
 
@@ -100,8 +104,9 @@ static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_DAC1_Init(void);
 void StartDefaultTask(void *argument);
-void StartTask02(void *argument);
-void Callback01(void *argument);
+void bms_monitor(void *argument);
+void fuel_gauge_monitor(void *argument);
+void can_monitor(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -152,35 +157,28 @@ int main(void)
   /* Init scheduler */
   osKernelInitialize();
   /* Create the mutex(es) */
-  /* creation of Mutex1 */
-  Mutex1Handle = osMutexNew(&Mutex1_attributes);
+  /* creation of mutex_01 */
+  mutex_01Handle = osMutexNew(&mutex_01_attributes);
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
 
   /* Create the semaphores(s) */
-  /* creation of myBinarySem01 */
-  myBinarySem01Handle = osSemaphoreNew(1, 1, &myBinarySem01_attributes);
-
-  /* creation of Semaphore_Cnt */
-  Semaphore_CntHandle = osSemaphoreNew(5, 0, &Semaphore_Cnt_attributes);
+  /* creation of semaphore_1 */
+  semaphore_1Handle = osSemaphoreNew(1, 1, &semaphore_1_attributes);
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
-
-  /* Create the timer(s) */
-  /* creation of myTimer01 */
-  myTimer01Handle = osTimerNew(Callback01, osTimerPeriodic, NULL, &myTimer01_attributes);
 
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
   /* Create the queue(s) */
-  /* creation of myQueue01 */
-  myQueue01Handle = osMessageQueueNew (16, sizeof(uint16_t), &myQueue01_attributes);
+  /* creation of CANQueue */
+  CANQueueHandle = osMessageQueueNew (32, sizeof(uint8_t), &CANQueue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -190,8 +188,14 @@ int main(void)
   /* creation of defaultTask */
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
-  /* creation of myTask02 */
-  myTask02Handle = osThreadNew(StartTask02, NULL, &myTask02_attributes);
+  /* creation of BMSMonitor */
+  BMSMonitorHandle = osThreadNew(bms_monitor, NULL, &BMSMonitor_attributes);
+
+  /* creation of FuelGaugeMonitor */
+  FuelGaugeMonitorHandle = osThreadNew(fuel_gauge_monitor, NULL, &FuelGaugeMonitor_attributes);
+
+  /* creation of CANMonitor */
+  CANMonitorHandle = osThreadNew(can_monitor, NULL, &CANMonitor_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -529,30 +533,58 @@ void StartDefaultTask(void *argument)
   /* USER CODE END 5 */
 }
 
-/* USER CODE BEGIN Header_StartTask02 */
+/* USER CODE BEGIN Header_bms_monitor */
 /**
-* @brief Function implementing the myTask02 thread.
+* @brief Function implementing the BMSMonitor thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_StartTask02 */
-void StartTask02(void *argument)
+/* USER CODE END Header_bms_monitor */
+void bms_monitor(void *argument)
 {
-  /* USER CODE BEGIN StartTask02 */
+  /* USER CODE BEGIN bms_monitor */
   /* Infinite loop */
   for(;;)
   {
     osDelay(1);
   }
-  /* USER CODE END StartTask02 */
+  /* USER CODE END bms_monitor */
 }
 
-/* Callback01 function */
-void Callback01(void *argument)
+/* USER CODE BEGIN Header_fuel_gauge_monitor */
+/**
+* @brief Function implementing the FuelGaugeMonitor thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_fuel_gauge_monitor */
+void fuel_gauge_monitor(void *argument)
 {
-  /* USER CODE BEGIN Callback01 */
+  /* USER CODE BEGIN fuel_gauge_monitor */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END fuel_gauge_monitor */
+}
 
-  /* USER CODE END Callback01 */
+/* USER CODE BEGIN Header_can_monitor */
+/**
+* @brief Function implementing the CANMonitor thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_can_monitor */
+void can_monitor(void *argument)
+{
+  /* USER CODE BEGIN can_monitor */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END can_monitor */
 }
 
 /**
