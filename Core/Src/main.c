@@ -32,7 +32,17 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define BMS_MODEL_10S
 
+
+#define SPI_READ_FRAME(addr)    (addr & 0x7F)
+#define SPI_WRITE_FRAME(addr)   ((addr & 0x7F) | 0x80)
+#define SPI_DUMMY_BYTE          (0x00)
+#define SPI_INVALID_RX_BUFFER   (0xFFFF)
+
+#define SPI_CLOCK_NOT_POWERED   (0xFFFFFF)
+#define SPI_CRC_ERROR           (0xFFFFAA)
+#define SPI_BMS_TIMEOUT         (0xFFFF00)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -114,7 +124,10 @@ void can_monitor(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void init_bms(void)
+{
 
+}
 /* USER CODE END 0 */
 
 /**
@@ -152,6 +165,7 @@ int main(void)
   MX_DAC1_Init();
   /* USER CODE BEGIN 2 */
 
+  init_bms();
   /* USER CODE END 2 */
 
   /* Init scheduler */
