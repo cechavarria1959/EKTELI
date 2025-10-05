@@ -27,6 +27,11 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+typedef struct
+{
+    CAN_RxHeaderTypeDef header;
+    uint8_t data[8];
+} can_message_t;
 
 /* USER CODE END PTD */
 
@@ -192,7 +197,7 @@ int main(void)
 
   /* Create the queue(s) */
   /* creation of CANQueue */
-  CANQueueHandle = osMessageQueueNew (32, sizeof(uint8_t), &CANQueue_attributes);
+  CANQueueHandle = osMessageQueueNew (32, sizeof(can_message_t), &CANQueue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -526,6 +531,23 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
+    can_message_t msg;
+    HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &msg.header, msg.data);
+
+    osMessageQueuePut(CANQueueHandle, &msg, 0, 0);
+    __NOP();
+
+}
+
+void HAL_CAN_RxFifo0FullCallback(CAN_HandleTypeDef *hcan)
+{
+    CAN_RxHeaderTypeDef   RxHeader;
+    uint8_t               RxData[8] = {0};
+    HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData);
+    __NOP();
+}
 
 /* USER CODE END 4 */
 
@@ -593,9 +615,14 @@ void fuel_gauge_monitor(void *argument)
 void can_monitor(void *argument)
 {
   /* USER CODE BEGIN can_monitor */
-  /* Infinite loop */
+  can_message_t msg;
   for(;;)
   {
+    if (osMessageQueueGet(CANQueueHandle, &msg, NULL, osWaitForever) == osOK)
+    {
+        // Procesa el mensaje aquí
+        // Ejemplo: analizar msg.header.StdId, msg.data, etc.
+    }
     osDelay(1);
   }
   /* USER CODE END can_monitor */
