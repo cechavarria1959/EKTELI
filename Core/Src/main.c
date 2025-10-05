@@ -129,7 +129,53 @@ void can_monitor(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/**
+ * The device will automatically wake the internal oscillator at a falling edge
+ * of SPI_CS, but it may take up to 50 µs to stabilize and be available for use
+ * to the SPI interface logic.
+ *
+ * It is recommended to limit the frequency of SPI transactions by providing
+ * 50 μs or more from the end of one transaction to the start of a new transaction.
+ *
+ * The first byte of a SPI transaction consists of an R/W bit (R = 0, W = 1),
+ * followed by a 7-bit address, MSB first. If the controller (host) is writing,
+ * then the second byte is the data written. If the controller is reading, then
+ * the second byte sent on SPI_MOSI is ignored (except for CRC calculation).
+ **/
 void init_bms(void)
+{
+
+}
+
+/**
+ * @brief Reset or shutdown BMS monitor
+ * @details During normal operation, the RST_SHUT pin should be driven low.
+ * When the pin is driven high, the BMS will immediately reset most of the
+ * digital logic, including that associated with the serial communications bus.
+ * However, it does not reset the logic that holds the state of the protection
+ * FETs and FUSE, these remain as they were before the pin was driven high. If
+ * the pin is driven high for 1 second, the device will transition into
+ * SHUTDOWN mode, disabling external protection FETs, powering off the internal
+ * oscillators, the REG18 LDO, the on-chip preregulator, and the REG1 and
+ * REG2 LDOs, preregulator, and the REG1 and REG2 LDOs.
+ */
+void bms_reset_shutdown(void)
+{
+
+}
+
+/**
+ * @brief Disable discharge FETs
+ * @details The DCHG pin is used to control the external discharge FETs.
+ * assert the DFETOFF pin to keep the FETs off. As long as the pin is asserted,
+ * the FETs are blocked from being reenabled. When the pin is deasserted,
+ * the BQ76952 will reenable the FETs if nothing is blocking them being
+ * reenabled (such as fault conditions still present, or the CFETOFF or
+ * DFETOFF pins are asserted).
+ * @note The DFETOFF or BOTHOFF functionality disables both the DSG FET and
+ * the PDSG FET when asserted.
+ */
+void bms_dfet_off(void)
 {
 
 }
@@ -477,13 +523,12 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, RST_SHUT_Pin|DDSG_Pin|DCHG_Pin|DFETOFF_Pin
-                          |TP5_Pin|CAN_SILENT_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, RST_SHUT_Pin|DFETOFF_Pin|TP5_Pin|CAN_SILENT_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : BAT_MON_ALERT_Pin */
   GPIO_InitStruct.Pin = BAT_MON_ALERT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(BAT_MON_ALERT_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PC15 */
@@ -492,13 +537,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : RST_SHUT_Pin DDSG_Pin DCHG_Pin DFETOFF_Pin
-                           TP5_Pin CAN_SILENT_Pin */
-  GPIO_InitStruct.Pin = RST_SHUT_Pin|DDSG_Pin|DCHG_Pin|DFETOFF_Pin
-                          |TP5_Pin|CAN_SILENT_Pin;
+  /*Configure GPIO pins : RST_SHUT_Pin DFETOFF_Pin TP5_Pin CAN_SILENT_Pin */
+  GPIO_InitStruct.Pin = RST_SHUT_Pin|DFETOFF_Pin|TP5_Pin|CAN_SILENT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : DDSG_Pin DCHG_Pin */
+  GPIO_InitStruct.Pin = DDSG_Pin|DCHG_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PB1 PB4 */
