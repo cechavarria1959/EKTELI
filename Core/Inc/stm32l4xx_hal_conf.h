@@ -183,7 +183,7 @@ extern "C"
      */
 
 #define VDD_VALUE                3300U /*!< Value of VDD in mv */
-#define TICK_INT_PRIORITY        4U    /*!< tick interrupt priority */
+#define TICK_INT_PRIORITY        15U   /*!< tick interrupt priority */
 #define USE_RTOS                 0U
 #define PREFETCH_ENABLE          0U
 #define INSTRUCTION_CACHE_ENABLE 1U
@@ -248,7 +248,7 @@ extern "C"
      * Deactivated: CRC code cleaned from driver
      */
 
-#define USE_SPI_CRC 0U
+#define USE_SPI_CRC 1U
 
     /* Includes ------------------------------------------------------------------*/
     /**

@@ -22,7 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "bms.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,6 +49,7 @@ typedef struct
 #define SPI_CLOCK_NOT_POWERED (0xFFFFFF)
 #define SPI_CRC_ERROR         (0xFFFFAA)
 #define SPI_BMS_TIMEOUT       (0xFFFF00)
+#define MAX_BUFFER_SIZE       10
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -106,7 +107,11 @@ osSemaphoreId_t         semaphore_1Handle;
 const osSemaphoreAttr_t semaphore_1_attributes = {
     .name = "semaphore_1"};
 /* USER CODE BEGIN PV */
-
+uint16_t AlarmBits            = 0x00;
+float    Temperature[3]       = {0, 0, 0};
+uint16_t Pack_Current         = 0x00;
+uint8_t  ProtectionsTriggered = 0;    // Set to 1 if any protection triggers
+uint8_t  rxdata[4];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -127,124 +132,145 @@ void        can_monitor(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-/**
- * The device will automatically wake the internal oscillator at a falling edge
- * of SPI_CS, but it may take up to 50 µs to stabilize and be available for use
- * to the SPI interface logic.
- *
- * It is recommended to limit the frequency of SPI transactions by providing
- * 50 μs or more from the end of one transaction to the start of a new transaction.
- *
- * The first byte of a SPI transaction consists of an R/W bit (R = 0, W = 1),
- * followed by a 7-bit address, MSB first. If the controller (host) is writing,
- * then the second byte is the data written. If the controller is reading, then
- * the second byte sent on SPI_MOSI is ignored (except for CRC calculation).
- **/
-void init_bms(void)
+void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count)
 {
-}
+    // SPI Write. Includes retries in case HFO has not started or if wait time is needed. See BQ76952 Software Development Guide for examples
+    uint8_t      addr;
+    uint8_t      TX_Buffer[MAX_BUFFER_SIZE] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    unsigned int i;
+    unsigned int match;
+    unsigned int retries = 10;
 
-/**
- * @brief Reset or shutdown BMS monitor
- * @details During normal operation, the RST_SHUT pin should be driven low.
- * When the pin is driven high, the BMS will immediately reset most of the
- * digital logic, including that associated with the serial communications bus.
- * However, it does not reset the logic that holds the state of the protection
- * FETs and FUSE, these remain as they were before the pin was driven high. If
- * the pin is driven high for 1 second, the device will transition into
- * SHUTDOWN mode, disabling external protection FETs, powering off the internal
- * oscillators, the REG18 LDO, the on-chip preregulator, and the REG1 and
- * REG2 LDOs, preregulator, and the REG1 and REG2 LDOs.
- */
-void bms_reset_shutdown(void)
-{
-}
+    match = 0;
+    addr  = 0x80 | reg_addr;
 
-/**
- * @brief Disable discharge FETs
- * @details The DCHG pin is used to control the external discharge FETs.
- * assert the DFETOFF pin to keep the FETs off. As long as the pin is asserted,
- * the FETs are blocked from being reenabled. When the pin is deasserted,
- * the BQ76952 will reenable the FETs if nothing is blocking them being
- * reenabled (such as fault conditions still present, or the CFETOFF or
- * DFETOFF pins are asserted).
- * @note The DFETOFF or BOTHOFF functionality disables both the DSG FET and
- * the PDSG FET when asserted.
- */
-void bms_dfet_off(void)
-{
-}
-
-void bms_start_transaction(void)
-{
-    /* send CONTROL_STATUS() command to awaken bms */
-
-    /* if bms respond not valid transaction, wait at least 135us and retry */
-
-    /* read bms status and proceed normal program flow */
-}
-
-void bms_send_command(uint8_t address, uint8_t data)
-{
-    /* check wether write or read command and call the respective function */
-    if (address & 0x80)
+    for (i = 0; i < count; i++)
     {
-        bms_write_register(address, data);
-    }
-    else
-    {
-        bms_read_register(address);
+        TX_Buffer[0] = addr;
+        TX_Buffer[1] = reg_data[i];
+
+        HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_RESET);
+        HAL_SPI_TransmitReceive(&hspi1, TX_Buffer, rxdata, 3, 1);
+        HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_SET);
+
+        while ((match == 0) & (retries > 0))
+        {
+            HAL_Delay(1);
+            HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_RESET);
+            HAL_SPI_TransmitReceive(&hspi1, TX_Buffer, rxdata, 3, 1);
+            HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_SET);
+            if ((rxdata[0] == addr) & (rxdata[1] == reg_data[i]))
+                match = 1;
+            retries--;
+        }
+        match = 0;
+        addr += 1;
+        retries = 10;
+        HAL_Delay(1);
     }
 }
 
-void bms_write_register(uint8_t address, uint8_t data)
+void CommandSubcommands(uint16_t command)    // For Command only Subcommands
+// See the TRM or the BQ76952 header file for a full list of Command-only subcommands
+{    // For DEEPSLEEP/SHUTDOWN subcommand you will need to call this function twice consecutively
+
+    uint8_t TX_Reg[2] = {0x00, 0x00};
+
+    // TX_Reg in little endian format
+    TX_Reg[0] = command & 0xff;
+    TX_Reg[1] = (command >> 8) & 0xff;
+
+    SPI_WriteReg(0x3E, TX_Reg, 2);
+    HAL_Delay(2);
+}
+
+void bms_init()
 {
-    uint8_t  tx_buffer[3];
-    uint8_t  rx_buffer[3];
-    uint16_t crc;
+    // Configures all parameters in device RAM
 
-    tx_buffer[0] = SPI_WRITE_FRAME(address);
-    tx_buffer[1] = data;
+    // Enter CONFIGUPDATE mode (Subcommand 0x0090) - It is required to be in CONFIG_UPDATE mode to program the device RAM settings
+    // See TRM for full description of CONFIG_UPDATE mode
+    CommandSubcommands(ADDR_SET_CFGUPDATE);
 
+    // After entering CONFIG_UPDATE mode, RAM registers can be programmed. When programming RAM, checksum and length must also be
+    // programmed for the change to take effect. All of the RAM registers are described in detail in the BQ769x2 TRM.
+    // An easier way to find the descriptions is in the BQStudio Data Memory screen. When you move the mouse over the register name,
+    // a full description of the register and the bits will pop up on the screen.
 #if 0
-    if(crc_enabled)
-    {
-        crc = crc8(tx_buffer, 2);
-        tx_buffer[2] = crc;
-    }
+    // 'Power Config' - 0x9234 = 0x2D80
+    // Setting the DSLP_LDO bit allows the LDOs to remain active when the device goes into Deep Sleep mode
+    // Set wake speed bits to 00 for best performance
+    BQ769x2_SetRegister(PowerConfig, 0x2D80, 2);
 
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // CS LOW
-    HAL_Delay(1); // tCSS 50us min
-    HAL_SPI_TransmitReceive(&hspi1, tx_buffer, rx_buffer, 3, HAL_MAX_DELAY);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); // CS HIGH
+    // 'REG0 Config' - set REG0_EN bit to enable pre-regulator
+    BQ769x2_SetRegister(REG0Config, 0x01, 1);
+
+    // 'REG12 Config' - Enable REG1 with 3.3V output (0x0D for 3.3V, 0x0F for 5V)
+    BQ769x2_SetRegister(REG12Config, 0x0D, 1);
+
+    // Set DFETOFF pin to control BOTH CHG and DSG FET - 0x92FB = 0x42 (set to 0x00 to disable)
+    BQ769x2_SetRegister(DFETOFFPinConfig, 0x42, 1);
+
+    // Set up ALERT Pin - 0x92FC = 0x2A
+    // This configures the ALERT pin to drive high (REG1 voltage) when enabled.
+    // The ALERT pin can be used as an interrupt to the MCU when a protection has triggered or new measurements are available
+    BQ769x2_SetRegister(ALERTPinConfig, 0x2A, 1);
+
+    // Set TS1 to measure Cell Temperature - 0x92FD = 0x07
+    BQ769x2_SetRegister(TS1Config, 0x07, 1);
+
+    // Set TS3 to measure FET Temperature - 0x92FF = 0x0F
+    BQ769x2_SetRegister(TS3Config, 0x0F, 1);
+
+    // Set HDQ to measure Cell Temperature - 0x9300 = 0x07
+    BQ769x2_SetRegister(HDQPinConfig, 0x00, 1);   // No thermistor installed on EVM HDQ pin, so set to 0x00
+
+    // 'VCell Mode' - Enable 16 cells - 0x9304 = 0x0000; Writing 0x0000 sets the default of 16 cells
+    BQ769x2_SetRegister(VCellMode, 0x0000, 2);
+
+    // Enable protections in 'Enabled Protections A' 0x9261 = 0xBC
+    // Enables SCD (short-circuit), OCD1 (over-current in discharge), OCC (over-current in charge),
+    // COV (over-voltage), CUV (under-voltage)
+    BQ769x2_SetRegister(EnabledProtectionsA, 0xBC, 1);
+
+    // Enable all protections in 'Enabled Protections B' 0x9262 = 0xF7
+    // Enables OTF (over-temperature FET), OTINT (internal over-temperature), OTD (over-temperature in discharge),
+    // OTC (over-temperature in charge), UTINT (internal under-temperature), UTD (under-temperature in discharge), UTC (under-temperature in charge)
+    BQ769x2_SetRegister(EnabledProtectionsB, 0xF7, 1);
+
+    // 'Default Alarm Mask' - 0x..82 Enables the FullScan and ADScan bits, default value = 0xF800
+    BQ769x2_SetRegister(DefaultAlarmMask, 0xF882, 2);
+
+    // Set up Cell Balancing Configuration - 0x9335 = 0x03   -  Automated balancing while in Relax or Charge modes
+    // Also see "Cell Balancing with BQ769x2 Battery Monitors" document on ti.com
+    BQ769x2_SetRegister(BalancingConfiguration, 0x03, 1);
+
+    // Set up CUV (under-voltage) Threshold - 0x9275 = 0x31 (2479 mV)
+    // CUV Threshold is this value multiplied by 50.6mV
+    BQ769x2_SetRegister(CUVThreshold, 0x31, 1);
+
+    // Set up COV (over-voltage) Threshold - 0x9278 = 0x55 (4301 mV)
+    // COV Threshold is this value multiplied by 50.6mV
+    BQ769x2_SetRegister(COVThreshold, 0x55, 1);
+
+    // Set up OCC (over-current in charge) Threshold - 0x9280 = 0x05 (10 mV = 10A across 1mOhm sense resistor) Units in 2mV
+    BQ769x2_SetRegister(OCCThreshold, 0x05, 1);
+
+    // Set up OCD1 Threshold - 0x9282 = 0x0A (20 mV = 20A across 1mOhm sense resistor) units of 2mV
+    BQ769x2_SetRegister(OCD1Threshold, 0x0A, 1);
+
+    // Set up SCD Threshold - 0x9286 = 0x05 (100 mV = 100A across 1mOhm sense resistor)  0x05=100mV
+    BQ769x2_SetRegister(SCDThreshold, 0x05, 1);
+
+    // Set up SCD Delay - 0x9287 = 0x03 (30 us) Enabled with a delay of (value - 1) * 15 �s; min value of 1
+    BQ769x2_SetRegister(SCDDelay, 0x03, 1);
+
+    // Set up SCDL Latch Limit to 1 to set SCD recovery only with load removal 0x9295 = 0x01
+    // If this is not set, then SCD will recover based on time (SCD Recovery Time parameter).
+    BQ769x2_SetRegister(SCDLLatchLimit, 0x01, 1);
 #endif
-
-    // Check response in rx_buffer if needed
-}
-
-void bms_read_register(uint8_t address)
-{
-    uint8_t  tx_buffer[3];
-    uint8_t  rx_buffer[3];
-    uint16_t crc;
-
-    tx_buffer[0] = SPI_READ_FRAME(address);
-    tx_buffer[1] = SPI_DUMMY_BYTE;
-
-#if 0
-    if(crc_enabled)
-    {
-        crc = crc8(tx_buffer, 2);
-        tx_buffer[2] = crc;
-    }
-
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // CS LOW
-    HAL_Delay(1); // tCSS 50us min
-    HAL_SPI_TransmitReceive(&hspi1, tx_buffer, rx_buffer, 3, HAL_MAX_DELAY);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); // CS HIGH
-#endif
-
-    // Process received data in rx_buffer if needed
+    // Exit CONFIGUPDATE mode  - Subcommand 0x0092
+    CommandSubcommands(ADDR_EXIT_CFGUPDATE);
 }
 /* USER CODE END 0 */
 
@@ -282,7 +308,51 @@ int main(void)
     MX_DAC1_Init();
     /* USER CODE BEGIN 2 */
 
-    init_bms();
+    CommandSubcommands(ADDR_RESET);    // Resets the BQ769x2 registers
+    HAL_Delay(60);
+    //	bms_init();  // Configure all of the BQ769x2 register settings
+    HAL_Delay(10);
+    CommandSubcommands(ADDR_FET_ENABLE);    // Enable the CHG and DSG FETs
+    HAL_Delay(10);
+    CommandSubcommands(ADDR_SLEEP_DISABLE);    // Sleep mode is enabled by default. For this example, Sleep is disabled to
+                                               // demonstrate full-speed measurements in Normal mode.
+#if 0
+    while (1)
+  {
+    //Reads Cell, Stack, Pack, LD Voltages, Pack Current and TS1/TS3 Temperatures in a loop
+	//This basic example polls the Alarm Status register to see if protections have triggered or new measurements are ready
+	//The ALERT pin can also be used as an interrupt to the microcontroller for fastest response time instead of polling
+	//In this example the LED on the microcontroller board will be turned on to indicate a protection has triggered and will 
+	//be turned off if the protection condition has cleared.
+
+		AlarmBits = BQ769x2_ReadAlarmStatus();
+		if (AlarmBits & 0x80) {  // Check if FULLSCAN is complete. If set, new measurements are available
+      		BQ769x2_ReadAllVoltages();
+      		Pack_Current = BQ769x2_ReadCurrent();
+      		Temperature[0] = BQ769x2_ReadTemperature(TS1Temperature);
+      		Temperature[1] = BQ769x2_ReadTemperature(TS3Temperature);
+			DirectCommands(AlarmStatus, 0x0080, W);  // Clear the FULLSCAN bit
+		}
+				
+		if (AlarmBits & 0xC000) {  // If Safety Status bits are showing in AlarmStatus register
+			BQ769x2_ReadSafetyStatus(); // Read the Safety Status registers to find which protections have triggered
+			if (ProtectionsTriggered & 1) {
+				HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_SET); }// Turn on the LED to indicate Protection has triggered
+				DirectCommands(AlarmStatus, 0xF800, W); // Clear the Safety Status Alarm bits.
+			}
+		else
+		{
+			if (ProtectionsTriggered & 1) {
+				BQ769x2_ReadSafetyStatus();
+				if (!(ProtectionsTriggered & 1)) 
+				{
+					HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_RESET);
+				} 
+			} // Turn off the LED if Safety Status has cleared which means the protection condition is no longer present
+		}
+		delayUS(20000);  // repeat loop every 20 ms
+  }
+#endif
     /* USER CODE END 2 */
 
     /* Init scheduler */
@@ -541,17 +611,17 @@ static void MX_SPI1_Init(void)
     hspi1.Instance               = SPI1;
     hspi1.Init.Mode              = SPI_MODE_MASTER;
     hspi1.Init.Direction         = SPI_DIRECTION_2LINES;
-    hspi1.Init.DataSize          = SPI_DATASIZE_16BIT;
+    hspi1.Init.DataSize          = SPI_DATASIZE_8BIT;
     hspi1.Init.CLKPolarity       = SPI_POLARITY_LOW;
     hspi1.Init.CLKPhase          = SPI_PHASE_1EDGE;
-    hspi1.Init.NSS               = SPI_NSS_HARD_OUTPUT;
+    hspi1.Init.NSS               = SPI_NSS_SOFT;
     hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
     hspi1.Init.FirstBit          = SPI_FIRSTBIT_MSB;
     hspi1.Init.TIMode            = SPI_TIMODE_DISABLE;
-    hspi1.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLE;
+    hspi1.Init.CRCCalculation    = SPI_CRCCALCULATION_ENABLE;
     hspi1.Init.CRCPolynomial     = 7;
     hspi1.Init.CRCLength         = SPI_CRC_LENGTH_DATASIZE;
-    hspi1.Init.NSSPMode          = SPI_NSS_PULSE_ENABLE;
+    hspi1.Init.NSSPMode          = SPI_NSS_PULSE_DISABLE;
     if (HAL_SPI_Init(&hspi1) != HAL_OK)
     {
         Error_Handler();
@@ -582,6 +652,9 @@ static void MX_GPIO_Init(void)
     /*Configure GPIO pin Output Level */
     HAL_GPIO_WritePin(GPIOA, RST_SHUT_Pin | DFETOFF_Pin | TP5_Pin | CAN_SILENT_Pin, GPIO_PIN_RESET);
 
+    /*Configure GPIO pin Output Level */
+    HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_SET);
+
     /*Configure GPIO pin : BAT_MON_ALERT_Pin */
     GPIO_InitStruct.Pin  = BAT_MON_ALERT_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
@@ -606,6 +679,13 @@ static void MX_GPIO_Init(void)
     GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    /*Configure GPIO pin : SPI_CS_Pin */
+    GPIO_InitStruct.Pin   = SPI_CS_Pin;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull  = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(SPI_CS_GPIO_Port, &GPIO_InitStruct);
 
     /*Configure GPIO pins : PB1 PB4 */
     GPIO_InitStruct.Pin  = GPIO_PIN_1 | GPIO_PIN_4;

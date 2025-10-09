@@ -33,6 +33,7 @@ typedef enum
     ADDR_EXIT_DEEPSLEEP       = 0x000E,
     ADDR_DEEPSLEEP            = 0x000F,
     ADDR_SHUTDOWN             = 0x0010,
+    ADDR_RESET                = 0x0012,
     ADDR_PDSGTEST             = 0x001C,
     ADDR_FUSE_TOGGLE          = 0x001D,
     ADDR_PCHGTEST             = 0x001E,
