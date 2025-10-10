@@ -112,6 +112,7 @@ float    Temperature[3]       = {0, 0, 0};
 uint16_t Pack_Current         = 0x00;
 uint8_t  ProtectionsTriggered = 0;    // Set to 1 if any protection triggers
 uint8_t  rxdata[4];
+uint8_t  RX_32Byte[32] = {0x00};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -132,6 +133,31 @@ void        can_monitor(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+unsigned char CRC8(unsigned char *ptr, unsigned char len)
+// Calculates CRC8 for passed bytes. Used in i2c read and write functions
+{
+    unsigned char i;
+    unsigned char crc = 0;
+    while (len-- != 0)
+    {
+        for (i = 0x80; i != 0; i /= 2)
+        {
+            if ((crc & 0x80) != 0)
+            {
+                crc *= 2;
+                crc ^= 0x107;
+            }
+            else
+                crc *= 2;
+
+            if ((*ptr & i) != 0)
+                crc ^= 0x107;
+        }
+        ptr++;
+    }
+    return (crc);
+}
+
 void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count)
 {
     // SPI Write. Includes retries in case HFO has not started or if wait time is needed. See BQ76952 Software Development Guide for examples
@@ -148,6 +174,7 @@ void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count)
     {
         TX_Buffer[0] = addr;
         TX_Buffer[1] = reg_data[i];
+        TX_Buffer[2] = CRC8(TX_Buffer, 2);
 
         HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_RESET);
         HAL_SPI_TransmitReceive(&hspi1, TX_Buffer, rxdata, 3, 1);
@@ -169,6 +196,62 @@ void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count)
         HAL_Delay(1);
     }
 }
+
+void SPI_ReadReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count)
+{
+    // SPI Read. Includes retries in case HFO has not started or if wait time is needed. See BQ76952 Software Development Guide for examples
+    uint8_t      addr;
+    uint8_t      TX_Buffer[MAX_BUFFER_SIZE] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    unsigned int i;
+    unsigned int match;
+    unsigned int retries = 10;
+
+    match = 0;
+    addr  = reg_addr;
+
+    for (i = 0; i < count; i++)
+    {
+        TX_Buffer[0] = addr;
+        TX_Buffer[1] = 0xFF;
+        TX_Buffer[2] = CRC8(TX_Buffer, 2);
+
+        HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_RESET);
+        HAL_SPI_TransmitReceive(&hspi1, TX_Buffer, rxdata, 3, 1);
+        HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_SET);
+
+        while ((match == 0) & (retries > 0))
+        {
+            HAL_Delay(1);
+            HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_RESET);
+            HAL_SPI_TransmitReceive(&hspi1, TX_Buffer, rxdata, 3, 1);
+            HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_SET);
+            if (rxdata[0] == addr)
+            {
+                match       = 1;
+                reg_data[i] = rxdata[1];
+            }
+            retries--;
+        }
+        match = 0;
+        addr += 1;
+        HAL_Delay(1);
+    }
+}
+
+unsigned char Checksum(unsigned char *ptr, unsigned char len)
+// Calculates the checksum when writing to a RAM register. The checksum is the inverse of the sum of the bytes.
+{
+    unsigned char i;
+    unsigned char checksum = 0;
+
+    for (i = 0; i < len; i++)
+        checksum += ptr[i];
+
+    checksum = 0xff & ~checksum;
+
+    return (checksum);
+}
+
 
 void CommandSubcommands(uint16_t command)    // For Command only Subcommands
 // See the TRM or the BQ76952 header file for a full list of Command-only subcommands
@@ -272,6 +355,71 @@ void bms_init()
     // Exit CONFIGUPDATE mode  - Subcommand 0x0092
     CommandSubcommands(ADDR_EXIT_CFGUPDATE);
 }
+
+void Subcommands(uint16_t command, uint16_t data, uint8_t type)
+// See the TRM or the BQ76952 header file for a full list of Subcommands
+{
+    // security keys and Manu_data writes dont work with this function (reading these commands works)
+    // max readback size is 32 bytes i.e. DASTATUS, CUV/COV snapshot
+    uint8_t TX_Reg[4]    = {0x00, 0x00, 0x00, 0x00};
+    uint8_t TX_Buffer[2] = {0x00, 0x00};
+
+    // TX_Reg in little endian format
+    TX_Reg[0] = command & 0xff;
+    TX_Reg[1] = (command >> 8) & 0xff;
+
+    if (type == 0)
+    {    // read
+        SPI_WriteReg(0x3E, TX_Reg, 2);
+        HAL_Delay(2);
+        SPI_ReadReg(0x40, RX_32Byte, 32);    // RX_32Byte is a global variable
+    }
+    else if (type == 1)
+    {
+        // FET_Control, REG12_Control
+        TX_Reg[2] = data & 0xff;
+        SPI_WriteReg(0x3E, TX_Reg, 3);
+        HAL_Delay(1);
+        TX_Buffer[0] = Checksum(TX_Reg, 3);
+        TX_Buffer[1] = 0x05;    // combined length of registers address and data
+        SPI_WriteReg(0x60, TX_Buffer, 2);
+        HAL_Delay(1);
+    }
+    else if (type == 2)
+    {    // write data with 2 bytes
+        // CB_Active_Cells, CB_SET_LVL
+        TX_Reg[2] = data & 0xff;
+        TX_Reg[3] = (data >> 8) & 0xff;
+        SPI_WriteReg(0x3E, TX_Reg, 4);
+        HAL_Delay(1);
+        TX_Buffer[0] = Checksum(TX_Reg, 4);
+        TX_Buffer[1] = 0x06;    // combined length of registers address and data
+        SPI_WriteReg(0x60, TX_Buffer, 2);
+        HAL_Delay(1);
+    }
+}
+
+void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
+// See the TRM or the BQ76952 header file for a full list of Direct Commands
+{    // type: R = read, W = write
+    uint8_t TX_data[3] = {0x00};
+
+    // little endian format
+    TX_data[0] = data & 0xff;
+    TX_data[1] = (data >> 8) & 0xff;
+
+    if (type == 0)
+    {                                       // Read
+        SPI_ReadReg(command, rxdata, 3);    // RX_data is a global variable
+        HAL_Delay(2);
+    }
+    if (type == 1)
+    {    // write
+        // Control_status, alarm_status, alarm_enable all 2 bytes long
+        SPI_WriteReg(command, TX_data, 2);
+        HAL_Delay(2);
+    }
+}
 /* USER CODE END 0 */
 
 /**
@@ -308,6 +456,10 @@ int main(void)
     MX_DAC1_Init();
     /* USER CODE BEGIN 2 */
 
+    Subcommands(ADDR_DEVICE_NUMBER, 0, 0);
+    //  CommandSubcommands(ADDR_DEVICE_NUMBER);
+    DirectCommands(ADDR_BATTERY_STATUS, 0, 0);    // read
+    DirectCommands(ADDR_ALARM_RAW_STATUS, 0, 0);
     CommandSubcommands(ADDR_RESET);    // Resets the BQ769x2 registers
     HAL_Delay(60);
     //	bms_init();  // Configure all of the BQ769x2 register settings
@@ -618,7 +770,7 @@ static void MX_SPI1_Init(void)
     hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
     hspi1.Init.FirstBit          = SPI_FIRSTBIT_MSB;
     hspi1.Init.TIMode            = SPI_TIMODE_DISABLE;
-    hspi1.Init.CRCCalculation    = SPI_CRCCALCULATION_ENABLE;
+    hspi1.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLE;
     hspi1.Init.CRCPolynomial     = 7;
     hspi1.Init.CRCLength         = SPI_CRC_LENGTH_DATASIZE;
     hspi1.Init.NSSPMode          = SPI_NSS_PULSE_DISABLE;
