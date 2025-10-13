@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "menu.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -31,7 +31,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define FW_UPDATE_BYTE_SEQUENCE_1 (0x5555AAAA)
+#define FW_UPDATE_BYTE_SEQUENCE_2 (0xAAAA5555)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -47,7 +48,9 @@ CRC_HandleTypeDef hcrc;
 RTC_HandleTypeDef hrtc;
 
 /* USER CODE BEGIN PV */
-
+extern uint32_t _estack;
+extern pFunction JumpToApplication;
+extern uint32_t JumpAddress;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -71,45 +74,72 @@ static void MX_CRC_Init(void);
   */
 int main(void)
 {
+    /* USER CODE BEGIN 1 */
 
-  /* USER CODE BEGIN 1 */
+    /* USER CODE END 1 */
 
-  /* USER CODE END 1 */
+    /* MCU Configuration--------------------------------------------------------*/
 
-  /* MCU Configuration--------------------------------------------------------*/
+    /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+    HAL_Init();
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+    /* USER CODE BEGIN Init */
 
-  /* USER CODE BEGIN Init */
+    /* USER CODE END Init */
 
-  /* USER CODE END Init */
+    /* Configure the system clock */
+    SystemClock_Config();
 
-  /* Configure the system clock */
-  SystemClock_Config();
+    /* USER CODE BEGIN SysInit */
 
-  /* USER CODE BEGIN SysInit */
+    /* USER CODE END SysInit */
 
-  /* USER CODE END SysInit */
+    /* Initialize all configured peripherals */
+    MX_GPIO_Init();
+    MX_CAN1_Init();
+    MX_RTC_Init();
+    MX_CRC_Init();
+    /* USER CODE BEGIN 2 */
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_CAN1_Init();
-  MX_RTC_Init();
-  MX_CRC_Init();
-  /* USER CODE BEGIN 2 */
+    if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) == FW_UPDATE_BYTE_SEQUENCE_1 &&
+        HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) == FW_UPDATE_BYTE_SEQUENCE_2)
+    {
+        /* Reset backup registers and initialize bootloader */
+        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0x00000000);
+        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0x00000000);
 
-  /* USER CODE END 2 */
+        FLASH_If_Init();
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
+        Main_Menu();
+    }
+    else
+    {
+        HAL_CAN_DeInit(&hcan1);
 
-    /* USER CODE BEGIN 3 */
-  }
-  /* USER CODE END 3 */
+        /* Test if user code is programmed starting from address "APPLICATION_ADDRESS" */
+        uint32_t tmp = ((*(__IO uint32_t*)APPLICATION_ADDRESS) & 0x2FFE0000 );
+        if (tmp == (uint32_t)&_estack)
+        {
+            /* Initialize user application's Stack Pointer & Jump to user application */
+            JumpAddress = *(__IO uint32_t*) (APPLICATION_ADDRESS + 4);
+
+            JumpToApplication = (pFunction) JumpAddress;
+
+            __set_MSP(*(__IO uint32_t*) APPLICATION_ADDRESS);
+            JumpToApplication();
+        }
+    }
+    /* USER CODE END 2 */
+
+    /* Infinite loop */
+    /* USER CODE BEGIN WHILE */
+    while (1)
+    {
+        /* USER CODE END WHILE */
+
+        /* USER CODE BEGIN 3 */
+    }
+    /* USER CODE END 3 */
 }
 
 /**
