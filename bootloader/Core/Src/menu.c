@@ -100,7 +100,7 @@ void SerialUpload(void)
 
   Serial_PutString((uint8_t *)"\n\n\rSelect Receive File\n\r");
 
-  HAL_UART_Receive(&UartHandle, &status, 1, RX_TIMEOUT);
+//  HAL_UART_Receive(&UartHandle, &status, 1, RX_TIMEOUT);
   if ( status == CRC16)
   {
     /* Transmit the flash image through ymodem protocol */
@@ -164,10 +164,10 @@ void Main_Menu(void)
     Serial_PutString((uint8_t *)"==========================================================\r\n\n");
 
     /* Clean the input path */
-    __HAL_UART_FLUSH_DRREGISTER(&UartHandle);
+//    __HAL_UART_FLUSH_DRREGISTER(&UartHandle);
 	
     /* Receive key */
-    HAL_UART_Receive(&UartHandle, &key, 1, RX_TIMEOUT);
+//    HAL_UART_Receive(&UartHandle, &key, 1, RX_TIMEOUT);
 
     switch (key)
     {
