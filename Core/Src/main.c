@@ -46,7 +46,9 @@ typedef enum
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define BMS_MODEL_10S
+#if !defined(BMS_MODEL_10S) && !defined(BMS_MODEL_14S)
+#error "Must define BMS_MODEL_10S or BMS_MODEL_14S"
+#endif
 
 
 #define SPI_READ_FRAME(addr)  (addr & 0x7F)
