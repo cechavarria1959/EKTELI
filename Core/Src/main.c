@@ -33,6 +33,15 @@ typedef struct
     uint8_t             data[8];
 } can_message_t;
 
+typedef enum
+{
+    GET_VOLTAGE,
+    GET_CURRENT,
+    GET_SOH,
+    GET_SOC,
+    FW_UPDATE
+} can_command_t;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -50,6 +59,9 @@ typedef struct
 #define SPI_CRC_ERROR         (0xFFFFAA)
 #define SPI_BMS_TIMEOUT       (0xFFFF00)
 #define MAX_BUFFER_SIZE       10
+
+#define FW_UPDATE_BYTE_SEQUENCE_1 (0x5555AAAA)
+#define FW_UPDATE_BYTE_SEQUENCE_2 (0xAAAA5555)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -63,6 +75,8 @@ CAN_HandleTypeDef hcan1;
 DAC_HandleTypeDef hdac1;
 
 I2C_HandleTypeDef hi2c1;
+
+RTC_HandleTypeDef hrtc;
 
 SPI_HandleTypeDef hspi1;
 
@@ -113,6 +127,9 @@ uint16_t Pack_Current         = 0x00;
 uint8_t  ProtectionsTriggered = 0;    // Set to 1 if any protection triggers
 uint8_t  rxdata[4];
 uint8_t  RX_32Byte[32] = {0x00};
+
+can_message_t rx_msg;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -122,6 +139,7 @@ static void MX_CAN1_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_DAC1_Init(void);
+static void MX_RTC_Init(void);
 void        StartDefaultTask(void *argument);
 void        bms_monitor(void *argument);
 void        fuel_gauge_monitor(void *argument);
@@ -420,6 +438,55 @@ void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
         HAL_Delay(2);
     }
 }
+
+
+/**
+ * @brief Decodes and processes CAN bus commands received in rx_msg.
+ *
+ * This function reads the command from the first byte of the CAN message data,
+ * and executes the corresponding action based on the command type.
+ * Supported commands include:
+ *   - GET_VOLTAGE: Retrieve battery voltage (implementation pending).
+ *   - GET_CURRENT: Retrieve battery current (implementation pending).
+ *   - GET_SOH: Retrieve State of Health (implementation pending).
+ *   - GET_SOC: Retrieve State of Charge (implementation pending).
+ *   - FW_UPDATE: Initiate firmware update sequence by writing specific values
+ *     to RTC backup registers and triggering a system reset, app starts in
+ *     bootloader mode.
+ */
+void can_decode_cmd(void)
+{
+    can_command_t cmd = rx_msg.data[0];
+
+    switch (cmd)
+    {
+        case GET_VOLTAGE:
+            /* todo */
+            break;
+
+        case GET_CURRENT:
+            /* todo */
+            break;
+
+        case GET_SOH:
+            /* todo */
+            break;
+
+        case GET_SOC:
+            /* todo */
+            break;
+
+        case FW_UPDATE:
+            HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, FW_UPDATE_BYTE_SEQUENCE_1);
+            HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, FW_UPDATE_BYTE_SEQUENCE_2);
+            HAL_Delay(1);
+            HAL_NVIC_SystemReset();
+            break;
+
+        default:
+            break;
+    }
+}
 /* USER CODE END 0 */
 
 /**
@@ -454,7 +521,10 @@ int main(void)
     MX_I2C1_Init();
     MX_SPI1_Init();
     MX_DAC1_Init();
+    MX_RTC_Init();
     /* USER CODE BEGIN 2 */
+
+    can_decode_cmd();
 
     Subcommands(ADDR_DEVICE_NUMBER, 0, 0);
     //  CommandSubcommands(ADDR_DEVICE_NUMBER);
@@ -593,7 +663,8 @@ void SystemClock_Config(void)
     /** Initializes the RCC Oscillators according to the specified parameters
      * in the RCC_OscInitTypeDef structure.
      */
-    RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_MSI;
+    RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_LSI | RCC_OSCILLATORTYPE_MSI;
+    RCC_OscInitStruct.LSIState            = RCC_LSI_ON;
     RCC_OscInitStruct.MSIState            = RCC_MSI_ON;
     RCC_OscInitStruct.MSICalibrationValue = 0;
     RCC_OscInitStruct.MSIClockRange       = RCC_MSIRANGE_6;
@@ -743,6 +814,40 @@ static void MX_I2C1_Init(void)
     /* USER CODE BEGIN I2C1_Init 2 */
 
     /* USER CODE END I2C1_Init 2 */
+}
+
+/**
+ * @brief RTC Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_RTC_Init(void)
+{
+    /* USER CODE BEGIN RTC_Init 0 */
+
+    /* USER CODE END RTC_Init 0 */
+
+    /* USER CODE BEGIN RTC_Init 1 */
+
+    /* USER CODE END RTC_Init 1 */
+
+    /** Initialize RTC Only
+     */
+    hrtc.Instance            = RTC;
+    hrtc.Init.HourFormat     = RTC_HOURFORMAT_24;
+    hrtc.Init.AsynchPrediv   = 127;
+    hrtc.Init.SynchPrediv    = 255;
+    hrtc.Init.OutPut         = RTC_OUTPUT_DISABLE;
+    hrtc.Init.OutPutRemap    = RTC_OUTPUT_REMAP_NONE;
+    hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+    hrtc.Init.OutPutType     = RTC_OUTPUT_TYPE_OPENDRAIN;
+    if (HAL_RTC_Init(&hrtc) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    /* USER CODE BEGIN RTC_Init 2 */
+
+    /* USER CODE END RTC_Init 2 */
 }
 
 /**
