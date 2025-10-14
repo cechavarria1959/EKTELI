@@ -27,8 +27,8 @@
 /* Private define ------------------------------------------------------------*/
 /*  1M0 flash 1 * 1024 * 1024 */
 #define FLASH_START_ADRESS    0x08000000
-#define FLASH_PAGE_NBPERBANK  256
-#define FLASH_BANK_NUMBER     2
+#define FLASH_PAGE_NBPERBANK  128
+#define FLASH_BANK_NUMBER     1
 
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
@@ -166,7 +166,7 @@ uint32_t FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t lengt
 uint32_t FLASH_If_GetWriteProtectionStatus(void)
 {
   uint32_t ProtectedPAGE = FLASHIF_PROTECTION_NONE;
-  FLASH_OBProgramInitTypeDef OptionsBytesStruct1, OptionsBytesStruct2, OptionsBytesStruct3, OptionsBytesStruct4;
+  FLASH_OBProgramInitTypeDef OptionsBytesStruct1, OptionsBytesStruct2;//, OptionsBytesStruct3, OptionsBytesStruct4;
   
   /* Unlock the Flash to enable the flash control register access *************/
   HAL_FLASH_Unlock();
@@ -183,8 +183,8 @@ uint32_t FLASH_If_GetWriteProtectionStatus(void)
   /* Check if there are write protected sectors inside the user flash area ***/
   HAL_FLASHEx_OBGetConfig(&OptionsBytesStruct1);
   HAL_FLASHEx_OBGetConfig(&OptionsBytesStruct2);
-  HAL_FLASHEx_OBGetConfig(&OptionsBytesStruct3);
-  HAL_FLASHEx_OBGetConfig(&OptionsBytesStruct4);
+//  HAL_FLASHEx_OBGetConfig(&OptionsBytesStruct3);
+//  HAL_FLASHEx_OBGetConfig(&OptionsBytesStruct4);
   
   /* Lock the Flash to disable the flash control register access (recommended
      to protect the FLASH memory against possible unwanted operation) *********/
@@ -228,28 +228,28 @@ uint32_t FLASH_If_GetWriteProtectionStatus(void)
     }   
   }
 
-  if(OptionsBytesStruct3.WRPEndOffset > OptionsBytesStruct3.WRPStartOffset)
-  {
-    /* check if area is inside the WRP Range */ 
-    if((OptionsBytesStruct3.WRPStartOffset * FLASH_PAGE_SIZE + FLASH_BASE + FLASH_PAGE_SIZE * FLASH_PAGE_NBPERBANK) >= APPLICATION_ADDRESS)
-    {
-       ProtectedPAGE|= FLASHIF_PROTECTION_WRPENABLED;
-    }   
-  }  
+//  if(OptionsBytesStruct3.WRPEndOffset > OptionsBytesStruct3.WRPStartOffset)
+//  {
+//    /* check if area is inside the WRP Range */
+//    if((OptionsBytesStruct3.WRPStartOffset * FLASH_PAGE_SIZE + FLASH_BASE + FLASH_PAGE_SIZE * FLASH_PAGE_NBPERBANK) >= APPLICATION_ADDRESS)
+//    {
+//       ProtectedPAGE|= FLASHIF_PROTECTION_WRPENABLED;
+//    }
+//  }
+//
+//  if(OptionsBytesStruct4.WRPEndOffset > OptionsBytesStruct4.WRPStartOffset)
+//  {
+//    /* check if area is inside the WRP Range */
+//    if((OptionsBytesStruct4.WRPStartOffset * FLASH_PAGE_SIZE + FLASH_BASE + FLASH_PAGE_SIZE * FLASH_PAGE_NBPERBANK) >= APPLICATION_ADDRESS)
+//    {
+//       ProtectedPAGE|= FLASHIF_PROTECTION_WRPENABLED;
+//    }
+//  }
   
-  if(OptionsBytesStruct4.WRPEndOffset > OptionsBytesStruct4.WRPStartOffset)
-  {
-    /* check if area is inside the WRP Range */ 
-    if((OptionsBytesStruct4.WRPStartOffset * FLASH_PAGE_SIZE + FLASH_BASE + FLASH_PAGE_SIZE * FLASH_PAGE_NBPERBANK) >= APPLICATION_ADDRESS)
-    {
-       ProtectedPAGE|= FLASHIF_PROTECTION_WRPENABLED;
-    }   
-  }
-  
-  if(OptionsBytesStruct4.RDPLevel != OB_RDP_LEVEL_0)
-  {
-    ProtectedPAGE|= FLASHIF_PROTECTION_RDPENABLED;
-  }
+//  if(OptionsBytesStruct4.RDPLevel != OB_RDP_LEVEL_0)
+//  {
+//    ProtectedPAGE|= FLASHIF_PROTECTION_RDPENABLED;
+//  }
     
   return ProtectedPAGE;
 }

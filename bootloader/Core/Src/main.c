@@ -101,6 +101,8 @@ int main(void)
     MX_CRC_Init();
     /* USER CODE BEGIN 2 */
 
+    Main_Menu();
+
     if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) == FW_UPDATE_BYTE_SEQUENCE_1 &&
         HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) == FW_UPDATE_BYTE_SEQUENCE_2)
     {

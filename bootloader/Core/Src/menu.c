@@ -162,6 +162,7 @@ void Main_Menu(void)
       Serial_PutString((uint8_t *)"  Enable the write protection -------------------------- 4\r\n\n");
     }
     Serial_PutString((uint8_t *)"==========================================================\r\n\n");
+    while(1);
 
     /* Clean the input path */
 //    __HAL_UART_FLUSH_DRREGISTER(&UartHandle);

@@ -38,7 +38,8 @@ enum
 };
 
 /* protection type */  
-enum{
+enum
+{
   FLASHIF_PROTECTION_NONE         = 0,
   FLASHIF_PROTECTION_PCROPENABLED = 0x1,
   FLASHIF_PROTECTION_WRPENABLED   = 0x2,
@@ -46,7 +47,8 @@ enum{
 };
 
 /* protection update */
-enum {
+enum
+{
 	FLASHIF_WRP_ENABLE,
 	FLASHIF_WRP_DISABLE
 };
@@ -57,10 +59,10 @@ enum {
 #define APPLICATION_ADDRESS     (uint32_t)0x08008000      /* Start user code address: ADDR_FLASH_PAGE_8 */
 
 /* Notable Flash addresses */
-#define USER_FLASH_END_ADDRESS        0x08100000
+#define USER_FLASH_END_ADDRESS        0x0801FFFF
 
 /* Define the user application size */
-#define USER_FLASH_SIZE               ((uint32_t)0x00003000) /* Small default template application */
+#define USER_FLASH_SIZE               (USER_FLASH_END_ADDRESS - APPLICATION_ADDRESS + 1)
 
 
 /* Exported macro ------------------------------------------------------------*/
