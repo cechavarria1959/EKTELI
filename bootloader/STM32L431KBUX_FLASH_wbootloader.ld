@@ -42,17 +42,31 @@ _estack = ORIGIN(RAM) + LENGTH(RAM); /* end of "RAM" Ram type memory */
 _Min_Heap_Size = 0x0; /* required amount of heap */
 _Min_Stack_Size = 0x400; /* required amount of stack */
 
+TARGET(binary)
+
+INPUT(bootloader.bin)
+
+OUTPUT_FORMAT(default)
+
+TARGET(default)
+
 /* Memories definition */
 MEMORY
 {
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 48K
   RAM2    (xrw)    : ORIGIN = 0x10000000,   LENGTH = 16K
+  BOOTROM  (rx)    : ORIGIN = 0x08000000,   LENGTH = 16K
   FLASH    (rx)    : ORIGIN = 0x08004000,   LENGTH = 16K
 }
 
 /* Sections */
 SECTIONS
 {
+	.bootloader :
+    {
+       bootloader.bin (.data)
+       . = ALIGN (0x4);
+    } > BOOTROM
 
   /* The startup code into "FLASH" Rom type memory */
   .isr_vector :
