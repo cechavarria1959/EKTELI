@@ -293,7 +293,6 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
   uint32_t flashdestination, ramsource, filesize;
   uint8_t *file_ptr;
   uint8_t file_size[FILE_SIZE_LENGTH], tmp, packets_received;
-  UNUSED(tmp);
 
   COM_StatusTypeDef result = COM_OK;
 
