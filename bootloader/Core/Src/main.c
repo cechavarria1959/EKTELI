@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <string.h>
 #include "menu.h"
 /* USER CODE END Includes */
 
@@ -73,15 +74,15 @@ HAL_StatusTypeDef can_msg_receive(uint8_t *pdata, uint32_t length, uint32_t time
     uint32_t tickstart = HAL_GetTick();
     uint32_t rx_count = length;
 
-    while(rx_count > 0)
+    while(rx_count > 0u)
     {
         /* Wait until msg is received */
-        while (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) == 0)
+        while (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) == 0u)
         {
             /* Check for the Timeout */
             if (timeout != HAL_MAX_DELAY)
             {
-                if (((HAL_GetTick() - tickstart) > timeout) || (timeout == 0U))
+                if (((HAL_GetTick() - tickstart) > timeout) || (timeout == 0u))
                 {
                     return HAL_TIMEOUT;
                 }
@@ -106,39 +107,37 @@ HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t tim
     uint32_t tickstart = HAL_GetTick();
     uint32_t tx_count = length;
 
-    while(tx_count > 0)
+    while(tx_count > 0u)
     {
         /* Wait until msg is received */
-        while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0)
+        while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0u)
         {
             /* Check for the Timeout */
             if (timeout != HAL_MAX_DELAY)
             {
-                if (((HAL_GetTick() - tickstart) > timeout) || (timeout == 0U))
+                if (((HAL_GetTick() - tickstart) > timeout) || (timeout == 0u))
                 {
                     return HAL_TIMEOUT;
                 }
             }
         }
 
-        tx_data[0] = *pdata++;
-        tx_data[1] = *pdata++;
-        tx_data[2] = *pdata++;
-        tx_data[3] = *pdata++;
-        tx_data[4] = *pdata++;
-        tx_data[5] = *pdata++;
-        tx_data[6] = *pdata++;
-        tx_data[7] = *pdata++;
-        tx_count -= 8u;
+        uint8_t bytes_to_copy = (tx_count >= 8u) ? 8u : tx_count;
+        memset(tx_data, 0, sizeof(tx_data));
 
-        tx_header.StdId = 0x232;
-        tx_header.RTR = CAN_RTR_DATA;
+        for (uint8_t i = 0u; i < bytes_to_copy; i++)
+        {
+            tx_data[i] = *pdata++;
+        }
+
+        tx_count -= bytes_to_copy;
+
+        tx_header.StdId = 0x232u;
         tx_header.IDE = CAN_ID_STD;
-        tx_header.DLC = 8;
+        tx_header.RTR = CAN_RTR_DATA;
+        tx_header.DLC = bytes_to_copy;
 
         HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &tx_mailbox);
-
-        
     }
 
     return HAL_OK;
