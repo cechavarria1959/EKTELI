@@ -96,6 +96,53 @@ HAL_StatusTypeDef can_msg_receive(uint8_t *pdata, uint32_t length, uint32_t time
 
     return HAL_OK;
 }
+
+HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t timeout)
+{
+    CAN_TxHeaderTypeDef tx_header;
+    uint8_t tx_data[8];
+    uint32_t tx_mailbox;
+
+    uint32_t tickstart = HAL_GetTick();
+    uint32_t tx_count = length;
+
+    while(tx_count > 0)
+    {
+        /* Wait until msg is received */
+        while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0)
+        {
+            /* Check for the Timeout */
+            if (timeout != HAL_MAX_DELAY)
+            {
+                if (((HAL_GetTick() - tickstart) > timeout) || (timeout == 0U))
+                {
+                    return HAL_TIMEOUT;
+                }
+            }
+        }
+
+        tx_data[0] = *pdata++;
+        tx_data[1] = *pdata++;
+        tx_data[2] = *pdata++;
+        tx_data[3] = *pdata++;
+        tx_data[4] = *pdata++;
+        tx_data[5] = *pdata++;
+        tx_data[6] = *pdata++;
+        tx_data[7] = *pdata++;
+        tx_count -= 8u;
+
+        tx_header.StdId = 0x232;
+        tx_header.RTR = CAN_RTR_DATA;
+        tx_header.IDE = CAN_ID_STD;
+        tx_header.DLC = 8;
+
+        HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &tx_mailbox);
+
+        
+    }
+
+    return HAL_OK;
+}
 /* USER CODE END 0 */
 
 /**
