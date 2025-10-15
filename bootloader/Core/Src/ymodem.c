@@ -485,7 +485,6 @@ COM_StatusTypeDef Ymodem_Transmit (uint8_t *p_buf, const uint8_t *p_file_name, u
         if (a_rx_ctrl[0] == CA)
         {
           HAL_Delay( 2 );
-//          __HAL_UART_FLUSH_DRREGISTER(&UartHandle);
           result = COM_ABORT;
         }
       }
@@ -596,7 +595,6 @@ COM_StatusTypeDef Ymodem_Transmit (uint8_t *p_buf, const uint8_t *p_file_name, u
         if (a_rx_ctrl[0] == CA)
         {
           HAL_Delay( 2 );
-//          __HAL_UART_FLUSH_DRREGISTER(&UartHandle);
           result = COM_ABORT;
         }
       }
@@ -644,7 +642,6 @@ COM_StatusTypeDef Ymodem_Transmit (uint8_t *p_buf, const uint8_t *p_file_name, u
       if (a_rx_ctrl[0] == CA)
       {
           HAL_Delay( 2 );
-//          __HAL_UART_FLUSH_DRREGISTER(&UartHandle);
           result = COM_ABORT;
       }
     }

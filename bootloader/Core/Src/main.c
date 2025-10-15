@@ -65,7 +65,37 @@ static void MX_CRC_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+HAL_StatusTypeDef can_msg_receive(uint8_t *pdata, uint32_t length, uint32_t timeout)
+{
+    CAN_RxHeaderTypeDef rx_header;
+    uint8_t rx_data[8];
 
+    uint32_t tickstart = HAL_GetTick();
+    uint32_t rx_count = length;
+
+    while(rx_count > 0)
+    {
+        /* Wait until msg is received */
+        while (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) == 0)
+        {
+            /* Check for the Timeout */
+            if (timeout != HAL_MAX_DELAY)
+            {
+                if (((HAL_GetTick() - tickstart) > timeout) || (timeout == 0U))
+                {
+                    return HAL_TIMEOUT;
+                }
+            }
+        }
+
+        HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
+        *pdata = rx_data[0];
+        pdata++;
+        rx_count--;
+    }
+
+    return HAL_OK;
+}
 /* USER CODE END 0 */
 
 /**
@@ -101,7 +131,8 @@ int main(void)
     MX_CRC_Init();
     /* USER CODE BEGIN 2 */
 
-    Main_Menu();
+    HAL_CAN_Start(&hcan1);  //only for test
+    Main_Menu();            //only for test
 
     if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) == FW_UPDATE_BYTE_SEQUENCE_1 &&
         HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) == FW_UPDATE_BYTE_SEQUENCE_2)
@@ -111,6 +142,7 @@ int main(void)
         HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0x00000000);
 
         FLASH_If_Init();
+        HAL_CAN_Start(&hcan1);
 
         Main_Menu();
     }

@@ -36,6 +36,7 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
+extern CAN_HandleTypeDef hcan1;
 extern CRC_HandleTypeDef hcrc;
 /* USER CODE END ET */
 
@@ -53,6 +54,7 @@ extern CRC_HandleTypeDef hcrc;
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+HAL_StatusTypeDef can_msg_receive(uint8_t *pdata, uint32_t length, uint32_t timeout);
 
 /* USER CODE END EFP */
 

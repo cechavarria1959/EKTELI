@@ -96,25 +96,28 @@ void SerialDownload(void)
   */
 void SerialUpload(void)
 {
-  uint8_t status = 0;
+    uint8_t status = 0;
 
-  Serial_PutString((uint8_t *)"\n\n\rSelect Receive File\n\r");
+    Serial_PutString((uint8_t *)"\n\n\rSelect Receive File\n\r");
 
-//  HAL_UART_Receive(&UartHandle, &status, 1, RX_TIMEOUT);
-  if ( status == CRC16)
-  {
-    /* Transmit the flash image through ymodem protocol */
-    status = Ymodem_Transmit((uint8_t*)APPLICATION_ADDRESS, (const uint8_t*)"UploadedFlashImage.bin", USER_FLASH_SIZE);
+    /* block-wait until receive first byte */
+    can_msg_receive(&status, 1, RX_TIMEOUT);
 
-    if (status != 0)
+    /* A 'C' character has been received */
+    if (status == CRC16)
     {
-      Serial_PutString((uint8_t *)"\n\rError Occurred while Transmitting File\n\r");
+        /* Transmit the flash image through ymodem protocol */
+        status = Ymodem_Transmit((uint8_t*)APPLICATION_ADDRESS, (const uint8_t*)"UploadedFlashImage.bin", USER_FLASH_SIZE);
+
+        if (status != COM_OK)
+        {
+            Serial_PutString((uint8_t *)"\n\rError Occurred while Transmitting File\n\r");
+        }
+        else
+        {
+            Serial_PutString((uint8_t *)"\n\rFile uploaded successfully \n\r");
+        }
     }
-    else
-    {
-      Serial_PutString((uint8_t *)"\n\rFile uploaded successfully \n\r");
-    }
-  }
 }
 
 /**
@@ -162,13 +165,10 @@ void Main_Menu(void)
       Serial_PutString((uint8_t *)"  Enable the write protection -------------------------- 4\r\n\n");
     }
     Serial_PutString((uint8_t *)"==========================================================\r\n\n");
-    while(1);
-
-    /* Clean the input path */
-//    __HAL_UART_FLUSH_DRREGISTER(&UartHandle);
 	
     /* Receive key */
-//    HAL_UART_Receive(&UartHandle, &key, 1, RX_TIMEOUT);
+    /* block-wait until receive first byte */
+    can_msg_receive(&key, 1, RX_TIMEOUT);
 
     switch (key)
     {
