@@ -93,9 +93,14 @@ HAL_StatusTypeDef can_msg_receive(uint8_t *pdata, uint32_t length, uint32_t time
         }
 
         HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
-        *pdata = rx_data[0];
-        pdata++;
-        rx_count--;
+
+        uint8_t bytes_to_copy = (rx_count >= 8u) ? 8u : rx_count;
+        for (uint8_t i = 0u; i < bytes_to_copy; i++)
+        {
+            *pdata++ = rx_data[i];
+        }
+
+        rx_count -= bytes_to_copy;
     }
 
     return HAL_OK;
