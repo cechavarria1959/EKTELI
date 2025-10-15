@@ -34,6 +34,9 @@
 /* USER CODE BEGIN PD */
 #define FW_UPDATE_BYTE_SEQUENCE_1 (0x5555AAAA)
 #define FW_UPDATE_BYTE_SEQUENCE_2 (0xAAAA5555)
+
+#define CAN_RX_STD_ID (0x230u)
+#define CAN_TX_STD_ID (0x232u)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -132,7 +135,7 @@ HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t tim
 
         tx_count -= bytes_to_copy;
 
-        tx_header.StdId = 0x232u;
+        tx_header.StdId = CAN_TX_STD_ID;
         tx_header.IDE = CAN_ID_STD;
         tx_header.RTR = CAN_RTR_DATA;
         tx_header.DLC = bytes_to_copy;

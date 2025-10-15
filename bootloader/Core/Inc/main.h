@@ -55,6 +55,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 HAL_StatusTypeDef can_msg_receive(uint8_t *pdata, uint32_t length, uint32_t timeout);
+HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t timeout);
 
 /* USER CODE END EFP */
 

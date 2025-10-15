@@ -360,8 +360,8 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
                     {
                       /* End session */
                       tmp = CA;
-//                      HAL_UART_Transmit(&UartHandle, &tmp, 1, NAK_TIMEOUT);
-//                      HAL_UART_Transmit(&UartHandle, &tmp, 1, NAK_TIMEOUT);
+                      can_msg_transmit(&tmp, 1, NAK_TIMEOUT);
+                      can_msg_transmit(&tmp, 1, NAK_TIMEOUT);
                       result = COM_LIMIT;
                     }
                     /* erase user application area */
@@ -458,7 +458,7 @@ COM_StatusTypeDef Ymodem_Transmit (uint8_t *p_buf, const uint8_t *p_file_name, u
   while (( !ack_recpt ) && ( result == COM_OK ))
   {
     /* Send Packet */
-//    HAL_UART_Transmit(&UartHandle, &aPacketData[PACKET_START_INDEX], PACKET_SIZE + PACKET_HEADER_SIZE, NAK_TIMEOUT);
+    can_msg_transmit(&aPacketData[PACKET_START_INDEX], PACKET_SIZE + PACKET_HEADER_SIZE, NAK_TIMEOUT);
 
     /* Send CRC or Check Sum based on CRC16_F */
 #ifdef CRC16_F    
@@ -521,7 +521,7 @@ COM_StatusTypeDef Ymodem_Transmit (uint8_t *p_buf, const uint8_t *p_file_name, u
         pkt_size = PACKET_SIZE;
       }
 
-//      HAL_UART_Transmit(&UartHandle, &aPacketData[PACKET_START_INDEX], pkt_size + PACKET_HEADER_SIZE, NAK_TIMEOUT);
+      can_msg_transmit(&aPacketData[PACKET_START_INDEX], pkt_size + PACKET_HEADER_SIZE, NAK_TIMEOUT);
       
       /* Send CRC or Check Sum based on CRC16_F */
 #ifdef CRC16_F    
@@ -617,7 +617,7 @@ COM_StatusTypeDef Ymodem_Transmit (uint8_t *p_buf, const uint8_t *p_file_name, u
     }
 
     /* Send Packet */
-//    HAL_UART_Transmit(&UartHandle, &aPacketData[PACKET_START_INDEX], PACKET_SIZE + PACKET_HEADER_SIZE, NAK_TIMEOUT);
+    can_msg_transmit(&aPacketData[PACKET_START_INDEX], PACKET_SIZE + PACKET_HEADER_SIZE, NAK_TIMEOUT);
 
     /* Send CRC or Check Sum based on CRC16_F */
 #ifdef CRC16_F    
