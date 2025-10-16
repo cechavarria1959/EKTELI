@@ -22,6 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
 #include "bms.h"
 /* USER CODE END Includes */
 
@@ -525,6 +526,8 @@ int main(void)
     MX_DAC1_Init();
     MX_RTC_Init();
     /* USER CODE BEGIN 2 */
+
+    printf("Version BMS ver1.0\n");
 
     can_decode_cmd();
 
