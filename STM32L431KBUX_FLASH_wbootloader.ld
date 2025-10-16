@@ -54,9 +54,9 @@ TARGET(default)
 MEMORY
 {
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 48K
-  RAM2    (xrw)    : ORIGIN = 0x10000000,   LENGTH = 16K
-  /* BOOTROM (rx)    : ORIGIN = 0x08000000,   LENGTH = 16K */
-  /* FLASH    (rx)    : ORIGIN = adjust,   LENGTH = 128K */
+  RAM2    (xrw)   : ORIGIN = 0x10000000,   LENGTH = 16K
+  BOOTROM (rx)    : ORIGIN = 0x08000000,   LENGTH = 16K
+  FLASH    (rx)   : ORIGIN = 0x08004000,   LENGTH = 112K
 }
 
 /* Sections */
