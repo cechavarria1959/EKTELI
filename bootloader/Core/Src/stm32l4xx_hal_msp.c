@@ -1,21 +1,21 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file         stm32l4xx_hal_msp.c
-  * @brief        This file provides code for the MSP Initialization
-  *               and de-Initialization codes.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file         stm32l4xx_hal_msp.c
+ * @brief        This file provides code for the MSP Initialization
+ *               and de-Initialization codes.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2025 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
@@ -58,190 +58,180 @@
 
 /* USER CODE END 0 */
 /**
-  * Initializes the Global MSP.
-  */
+ * Initializes the Global MSP.
+ */
 void HAL_MspInit(void)
 {
+    /* USER CODE BEGIN MspInit 0 */
 
-  /* USER CODE BEGIN MspInit 0 */
+    /* USER CODE END MspInit 0 */
 
-  /* USER CODE END MspInit 0 */
+    __HAL_RCC_SYSCFG_CLK_ENABLE();
+    __HAL_RCC_PWR_CLK_ENABLE();
 
-  __HAL_RCC_SYSCFG_CLK_ENABLE();
-  __HAL_RCC_PWR_CLK_ENABLE();
+    /* System interrupt init*/
 
-  /* System interrupt init*/
+    /* USER CODE BEGIN MspInit 1 */
 
-  /* USER CODE BEGIN MspInit 1 */
-
-  /* USER CODE END MspInit 1 */
+    /* USER CODE END MspInit 1 */
 }
 
 /**
-  * @brief CAN MSP Initialization
-  * This function configures the hardware resources used in this example
-  * @param hcan: CAN handle pointer
-  * @retval None
-  */
-void HAL_CAN_MspInit(CAN_HandleTypeDef* hcan)
+ * @brief CAN MSP Initialization
+ * This function configures the hardware resources used in this example
+ * @param hcan: CAN handle pointer
+ * @retval None
+ */
+void HAL_CAN_MspInit(CAN_HandleTypeDef *hcan)
 {
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  if(hcan->Instance==CAN1)
-  {
-    /* USER CODE BEGIN CAN1_MspInit 0 */
-
-    /* USER CODE END CAN1_MspInit 0 */
-    /* Peripheral clock enable */
-    __HAL_RCC_CAN1_CLK_ENABLE();
-
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    /**CAN1 GPIO Configuration
-    PA11     ------> CAN1_RX
-    PA12     ------> CAN1_TX
-    */
-    GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO_PIN_12;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF9_CAN1;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-    /* USER CODE BEGIN CAN1_MspInit 1 */
-
-    /* USER CODE END CAN1_MspInit 1 */
-
-  }
-
-}
-
-/**
-  * @brief CAN MSP De-Initialization
-  * This function freeze the hardware resources used in this example
-  * @param hcan: CAN handle pointer
-  * @retval None
-  */
-void HAL_CAN_MspDeInit(CAN_HandleTypeDef* hcan)
-{
-  if(hcan->Instance==CAN1)
-  {
-    /* USER CODE BEGIN CAN1_MspDeInit 0 */
-
-    /* USER CODE END CAN1_MspDeInit 0 */
-    /* Peripheral clock disable */
-    __HAL_RCC_CAN1_CLK_DISABLE();
-
-    /**CAN1 GPIO Configuration
-    PA11     ------> CAN1_RX
-    PA12     ------> CAN1_TX
-    */
-    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11|GPIO_PIN_12);
-
-    /* USER CODE BEGIN CAN1_MspDeInit 1 */
-
-    /* USER CODE END CAN1_MspDeInit 1 */
-  }
-
-}
-
-/**
-  * @brief CRC MSP Initialization
-  * This function configures the hardware resources used in this example
-  * @param hcrc: CRC handle pointer
-  * @retval None
-  */
-void HAL_CRC_MspInit(CRC_HandleTypeDef* hcrc)
-{
-  if(hcrc->Instance==CRC)
-  {
-    /* USER CODE BEGIN CRC_MspInit 0 */
-
-    /* USER CODE END CRC_MspInit 0 */
-    /* Peripheral clock enable */
-    __HAL_RCC_CRC_CLK_ENABLE();
-    /* USER CODE BEGIN CRC_MspInit 1 */
-
-    /* USER CODE END CRC_MspInit 1 */
-
-  }
-
-}
-
-/**
-  * @brief CRC MSP De-Initialization
-  * This function freeze the hardware resources used in this example
-  * @param hcrc: CRC handle pointer
-  * @retval None
-  */
-void HAL_CRC_MspDeInit(CRC_HandleTypeDef* hcrc)
-{
-  if(hcrc->Instance==CRC)
-  {
-    /* USER CODE BEGIN CRC_MspDeInit 0 */
-
-    /* USER CODE END CRC_MspDeInit 0 */
-    /* Peripheral clock disable */
-    __HAL_RCC_CRC_CLK_DISABLE();
-    /* USER CODE BEGIN CRC_MspDeInit 1 */
-
-    /* USER CODE END CRC_MspDeInit 1 */
-  }
-
-}
-
-/**
-  * @brief RTC MSP Initialization
-  * This function configures the hardware resources used in this example
-  * @param hrtc: RTC handle pointer
-  * @retval None
-  */
-void HAL_RTC_MspInit(RTC_HandleTypeDef* hrtc)
-{
-  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
-  if(hrtc->Instance==RTC)
-  {
-    /* USER CODE BEGIN RTC_MspInit 0 */
-
-    /* USER CODE END RTC_MspInit 0 */
-
-  /** Initializes the peripherals clock
-  */
-    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC;
-    PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
-    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    if (hcan->Instance == CAN1)
     {
-      Error_Handler();
+        /* USER CODE BEGIN CAN1_MspInit 0 */
+
+        /* USER CODE END CAN1_MspInit 0 */
+        /* Peripheral clock enable */
+        __HAL_RCC_CAN1_CLK_ENABLE();
+
+        __HAL_RCC_GPIOA_CLK_ENABLE();
+        /**CAN1 GPIO Configuration
+        PA11     ------> CAN1_RX
+        PA12     ------> CAN1_TX
+        */
+        GPIO_InitStruct.Pin       = GPIO_PIN_11 | GPIO_PIN_12;
+        GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+        GPIO_InitStruct.Pull      = GPIO_NOPULL;
+        GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+        GPIO_InitStruct.Alternate = GPIO_AF9_CAN1;
+        HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+        /* USER CODE BEGIN CAN1_MspInit 1 */
+
+        /* USER CODE END CAN1_MspInit 1 */
     }
-
-    /* Peripheral clock enable */
-    __HAL_RCC_RTC_ENABLE();
-    /* USER CODE BEGIN RTC_MspInit 1 */
-
-    /* USER CODE END RTC_MspInit 1 */
-
-  }
-
 }
 
 /**
-  * @brief RTC MSP De-Initialization
-  * This function freeze the hardware resources used in this example
-  * @param hrtc: RTC handle pointer
-  * @retval None
-  */
-void HAL_RTC_MspDeInit(RTC_HandleTypeDef* hrtc)
+ * @brief CAN MSP De-Initialization
+ * This function freeze the hardware resources used in this example
+ * @param hcan: CAN handle pointer
+ * @retval None
+ */
+void HAL_CAN_MspDeInit(CAN_HandleTypeDef *hcan)
 {
-  if(hrtc->Instance==RTC)
-  {
-    /* USER CODE BEGIN RTC_MspDeInit 0 */
+    if (hcan->Instance == CAN1)
+    {
+        /* USER CODE BEGIN CAN1_MspDeInit 0 */
 
-    /* USER CODE END RTC_MspDeInit 0 */
-    /* Peripheral clock disable */
-    __HAL_RCC_RTC_DISABLE();
-    /* USER CODE BEGIN RTC_MspDeInit 1 */
+        /* USER CODE END CAN1_MspDeInit 0 */
+        /* Peripheral clock disable */
+        __HAL_RCC_CAN1_CLK_DISABLE();
 
-    /* USER CODE END RTC_MspDeInit 1 */
-  }
+        /**CAN1 GPIO Configuration
+        PA11     ------> CAN1_RX
+        PA12     ------> CAN1_TX
+        */
+        HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11 | GPIO_PIN_12);
 
+        /* USER CODE BEGIN CAN1_MspDeInit 1 */
+
+        /* USER CODE END CAN1_MspDeInit 1 */
+    }
+}
+
+/**
+ * @brief CRC MSP Initialization
+ * This function configures the hardware resources used in this example
+ * @param hcrc: CRC handle pointer
+ * @retval None
+ */
+void HAL_CRC_MspInit(CRC_HandleTypeDef *hcrc)
+{
+    if (hcrc->Instance == CRC)
+    {
+        /* USER CODE BEGIN CRC_MspInit 0 */
+
+        /* USER CODE END CRC_MspInit 0 */
+        /* Peripheral clock enable */
+        __HAL_RCC_CRC_CLK_ENABLE();
+        /* USER CODE BEGIN CRC_MspInit 1 */
+
+        /* USER CODE END CRC_MspInit 1 */
+    }
+}
+
+/**
+ * @brief CRC MSP De-Initialization
+ * This function freeze the hardware resources used in this example
+ * @param hcrc: CRC handle pointer
+ * @retval None
+ */
+void HAL_CRC_MspDeInit(CRC_HandleTypeDef *hcrc)
+{
+    if (hcrc->Instance == CRC)
+    {
+        /* USER CODE BEGIN CRC_MspDeInit 0 */
+
+        /* USER CODE END CRC_MspDeInit 0 */
+        /* Peripheral clock disable */
+        __HAL_RCC_CRC_CLK_DISABLE();
+        /* USER CODE BEGIN CRC_MspDeInit 1 */
+
+        /* USER CODE END CRC_MspDeInit 1 */
+    }
+}
+
+/**
+ * @brief RTC MSP Initialization
+ * This function configures the hardware resources used in this example
+ * @param hrtc: RTC handle pointer
+ * @retval None
+ */
+void HAL_RTC_MspInit(RTC_HandleTypeDef *hrtc)
+{
+    RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+    if (hrtc->Instance == RTC)
+    {
+        /* USER CODE BEGIN RTC_MspInit 0 */
+
+        /* USER CODE END RTC_MspInit 0 */
+
+        /** Initializes the peripherals clock
+         */
+        PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC;
+        PeriphClkInit.RTCClockSelection    = RCC_RTCCLKSOURCE_LSI;
+        if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+        {
+            Error_Handler();
+        }
+
+        /* Peripheral clock enable */
+        __HAL_RCC_RTC_ENABLE();
+        /* USER CODE BEGIN RTC_MspInit 1 */
+
+        /* USER CODE END RTC_MspInit 1 */
+    }
+}
+
+/**
+ * @brief RTC MSP De-Initialization
+ * This function freeze the hardware resources used in this example
+ * @param hrtc: RTC handle pointer
+ * @retval None
+ */
+void HAL_RTC_MspDeInit(RTC_HandleTypeDef *hrtc)
+{
+    if (hrtc->Instance == RTC)
+    {
+        /* USER CODE BEGIN RTC_MspDeInit 0 */
+
+        /* USER CODE END RTC_MspDeInit 0 */
+        /* Peripheral clock disable */
+        __HAL_RCC_RTC_DISABLE();
+        /* USER CODE BEGIN RTC_MspDeInit 1 */
+
+        /* USER CODE END RTC_MspDeInit 1 */
+    }
 }
 
 /* USER CODE BEGIN 1 */
