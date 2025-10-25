@@ -148,8 +148,15 @@ void Serial_PutString(uint8_t *p_string)
         length++;
     }
 
-    for (int i = 0; i < length; i++)
-        ITM_SendChar(*p_string++);
+    //    for (int i = 0; i < length; i++)
+    //        ITM_SendChar(*p_string++);
+
+    HAL_StatusTypeDef returnvalue = can_msg_transmit(p_string, length, TX_TIMEOUT);
+    if (returnvalue != HAL_OK)
+    {
+        __NOP();
+        Error_Handler();
+    }
 }
 
 /**
@@ -159,7 +166,9 @@ void Serial_PutString(uint8_t *p_string)
  */
 HAL_StatusTypeDef Serial_PutByte(uint8_t param)
 {
-    ITM_SendChar(param);
+    //    ITM_SendChar(param);
+
+    can_msg_transmit(&param, 1, TX_TIMEOUT);
 
     return HAL_OK;
 }

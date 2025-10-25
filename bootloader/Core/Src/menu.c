@@ -170,6 +170,9 @@ void Main_Menu(void)
         /* block-wait until receive first byte */
         can_msg_receive(&key, 1, RX_TIMEOUT);
 
+        while (1)
+            ;
+
         switch (key)
         {
             case '1':

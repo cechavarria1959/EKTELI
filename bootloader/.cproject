@@ -182,4 +182,5 @@
 			<resource resourceType="PROJECT" workspacePath="/bootloader"/>
 		</configuration>
 	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
 </cproject>
