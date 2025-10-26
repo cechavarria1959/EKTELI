@@ -155,7 +155,7 @@ void Serial_PutString(uint8_t *p_string)
     if (returnvalue != HAL_OK)
     {
         __NOP();
-        Error_Handler();
+        //        Error_Handler();
     }
 }
 
