@@ -1,28 +1,63 @@
+/**
+ * @file uart_to_can_bridge.ino
+ * @brief UART to CAN bridge for Ekteli Computer using MCP2515 CAN controller.
+ *
+ * This program implements a bridge between UART (Serial) and CAN bus using the MCP2515 CAN controller.
+ * It receives data from the CAN bus and stores it in a circular buffer, making it available for transmission
+ * over UART. It also reads data from UART, processes it according to the YMODEM protocol, and sends it over CAN.
+ *
+ * Features:
+ * - Interrupt-driven CAN message reception and buffering.
+ * - Circular buffer management for CAN-to-UART data.
+ * - UART data reception with timeout and YMODEM packet size detection.
+ * - CAN message transmission for single characters and multi-byte packets.
+ * - Error handling and MCP2515 interrupt/flag clearing.
+ *
+ * Definitions:
+ * - BUFFER_SIZE: Size of the circular buffer for CAN-to-UART data.
+ * - YMODEM_BUF_SIZE: Buffer size for YMODEM protocol packets.
+ * - CAN_DOWNLOAD_STD_ID: Standard CAN ID used for outgoing messages.
+ *
+ * Global Variables:
+ * - buffer: Circular buffer for storing CAN data to be sent over UART.
+ * - buffer2: Buffer for storing UART data to be sent over CAN.
+ * - buffer_available: Flag indicating new CAN data is available for UART transmission.
+ * - errors: Error flag for CAN controller issues.
+ *
+ * Functions:
+ * - irqHandler(): Interrupt handler for CAN message reception.
+ * - read_serial(): Reads UART data, determines packet size, and prepares for CAN transmission.
+ * - send_one_char(): Sends a single byte over CAN.
+ * - send_multiple_bytes(): Sends multiple bytes from UART buffer over CAN.
+ *
+ * @author Cesar Oliveros
+ */
+
 #include <SPI.h>
 #include <mcp2515.h>
 #include <stdint.h>
 
-#define CAN_DOWNLOAD_STD_ID (0x230u)
-#define CAN_ACK_ID (0x555)
-
 #define BUFFER_SIZE (1024) 
+#define YMODEM_BUF_SIZE (1030)
+
+#define CAN_DOWNLOAD_STD_ID (0x230u)
 
 struct can_frame canMsg;
 MCP2515 mcp2515(10);
-int pushButton = PC13;
 
-volatile bool buffer_available = false;
 char buffer[BUFFER_SIZE];
 size_t buf_size;
 
+int errors=0;
 int last_added = 0;
 int last_printed = 0;
+int bytestotales = 0;
 
-int tail = 0;
+uint8_t buffer2[YMODEM_BUF_SIZE];
+uint32_t packet_size = 0;
+uint32_t punterobuffer = 0;
 
-int errors=0;
-
-uint8_t ack_flag = 0;
+volatile bool buffer_available = false;
 
 void irqHandler()
 {
@@ -30,43 +65,33 @@ void irqHandler()
 
     if(irq & MCP2515::CANINTF_RX0IF || irq & MCP2515::CANINTF_RX1IF)
     {
-        // while(mcp2515.checkReceive() == true)
-        // {
-            if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK)
+        if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK)
+        {
+            uint8_t dlc = canMsg.can_dlc;
+            
+            if(last_added + dlc >= BUFFER_SIZE)
             {
-                // if(canMsg.can_id == CAN_ACK_ID)
-                // {
-                //     Serial.println("ack!");
-                //     ack_flag = 1;
-                //     return;
-                // }
-
-                uint8_t dlc = canMsg.can_dlc;
-                
-                if(last_added + dlc >= BUFFER_SIZE)
-                {
-                    int tmp_size = BUFFER_SIZE - last_added;
-                    memcpy(&buffer[last_added], canMsg.data, tmp_size);
-                    memcpy(&buffer[0], canMsg.data, dlc - tmp_size);
-                    last_added = dlc - tmp_size;
-                }
-                else
-                {
-                    memcpy(&buffer[last_added], canMsg.data, dlc);
-                    last_added += dlc;
-                }
-                
-                buf_size += dlc;
-                buffer_available = true;
+                int tmp_size = BUFFER_SIZE - last_added;
+                memcpy(&buffer[last_added], canMsg.data, tmp_size);
+                memcpy(&buffer[0], canMsg.data, dlc - tmp_size);
+                last_added = dlc - tmp_size;
             }
-        // }
+            else
+            {
+                memcpy(&buffer[last_added], canMsg.data, dlc);
+                last_added += dlc;
+            }
+            
+            buf_size += dlc;
+            buffer_available = true;
+        }
     }
     else
     {
         errors=1;
     }
 }
-uint32_t time_send;
+
 void setup()
 {
     Serial.begin(115200);
@@ -78,13 +103,7 @@ void setup()
     mcp2515.setNormalMode();
 
     attachInterrupt(2, irqHandler, FALLING);
-
-    time_send = millis();
 }
-uint8_t buffer2[1030];
-uint32_t packet_size = 0;
-uint32_t punterobuffer = 0;
-int bytestotales = 0;
 
 bool read_serial()
 {
@@ -179,7 +198,6 @@ void send_one_char(int chr)
     memcpy(cantx.data, &chr, 1);
 
     delay(1);
-
     while(mcp2515.sendMessage(MCP2515::TXB0, &cantx) != MCP2515::ERROR_OK);
 }
 
