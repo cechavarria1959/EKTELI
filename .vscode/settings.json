@@ -2,6 +2,8 @@
     "files.associations": {
         "cmsis_os.h": "c",
         "main.h": "c",
-        "bms.h": "c"
+        "bms.h": "c",
+        "ymodem.h": "c",
+        "flash_if.h": "c"
     }    
 }
