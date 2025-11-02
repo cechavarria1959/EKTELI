@@ -27,7 +27,7 @@
 /* Private define ------------------------------------------------------------*/
 /*  1M0 flash 1 * 1024 * 1024 */
 #define FLASH_START_ADRESS   0x08000000
-#define FLASH_PAGE_NBPERBANK 128
+#define FLASH_PAGE_NBPERBANK 64
 #define FLASH_BANK_NUMBER    1
 
 /* Private macro -------------------------------------------------------------*/
@@ -72,7 +72,7 @@ uint32_t FLASH_If_Erase(uint32_t start)
     NbrOfPages = (FLASH_START_ADRESS + FLASH_SIZE);
     NbrOfPages = (NbrOfPages - start) / FLASH_PAGE_SIZE;
 
-    if (NbrOfPages > FLASH_PAGE_NBPERBANK)
+    if (NbrOfPages > FLASH_PAGE_NBPERBANK)    // esto nunca cumplira. chip tiene solo 1 bank
     {
         pEraseInit.Banks     = FLASH_BANK_1;
         pEraseInit.NbPages   = NbrOfPages % FLASH_PAGE_NBPERBANK;
@@ -116,10 +116,11 @@ uint32_t FLASH_If_Erase(uint32_t start)
  *         1: Error occurred while writing data in Flash memory
  *         2: Written Data in flash memory is different from expected one
  */
+uint32_t status = FLASHIF_OK;
 uint32_t FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t length)
 {
-    uint32_t status = FLASHIF_OK;
-    uint32_t i      = 0;
+    status     = FLASHIF_OK;
+    uint32_t i = 0;
 
     /* Unlock the Flash to enable the flash control register access *************/
     HAL_FLASH_Unlock();

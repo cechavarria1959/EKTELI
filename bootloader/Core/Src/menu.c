@@ -69,7 +69,7 @@ void SerialDownload(void)
         Serial_PutString((uint8_t *)"\n\r Size: ");
         Serial_PutString(number);
         Serial_PutString((uint8_t *)" Bytes\r\n");
-        Serial_PutString((uint8_t *)"-------------------\n");
+        //        Serial_PutString((uint8_t *)"-------------------\n");
     }
     else if (result == COM_LIMIT)
     {
@@ -129,13 +129,13 @@ void Main_Menu(void)
 {
     uint8_t key = 0;
 
-    Serial_PutString((uint8_t *)"\r\n======================================================================");
+    //    Serial_PutString((uint8_t *)"\r\n======================================================================");
     Serial_PutString((uint8_t *)"\r\n=              (C) COPYRIGHT 2017 STMicroelectronics                 =");
-    Serial_PutString((uint8_t *)"\r\n=                                                                    =");
+    //    Serial_PutString((uint8_t *)"\r\n=                                                                    =");
     Serial_PutString((uint8_t *)"\r\n=  STM32L4xx In-Application Programming Application  (Version 1.0.0) =");
-    Serial_PutString((uint8_t *)"\r\n=                                                                    =");
+    //    Serial_PutString((uint8_t *)"\r\n=                                                                    =");
     Serial_PutString((uint8_t *)"\r\n=                                   By MCD Application Team          =");
-    Serial_PutString((uint8_t *)"\r\n======================================================================");
+    //    Serial_PutString((uint8_t *)"\r\n======================================================================");
     Serial_PutString((uint8_t *)"\r\n\r\n");
 
     /* Test if any sector of Flash memory where user application will be loaded is write protected */
@@ -143,7 +143,7 @@ void Main_Menu(void)
 
     while (1)
     {
-        Serial_PutString((uint8_t *)"\r\n=================== Main Menu ============================\r\n\n");
+        //        Serial_PutString((uint8_t *)"\r\n=================== Main Menu ============================\r\n\n");
         Serial_PutString((uint8_t *)"  Download image to the internal Flash ----------------- 1\r\n\n");
         Serial_PutString((uint8_t *)"  Upload image from the internal Flash ----------------- 2\r\n\n");
         Serial_PutString((uint8_t *)"  Execute the loaded application ----------------------- 3\r\n\n");
@@ -154,8 +154,8 @@ void Main_Menu(void)
             Serial_PutString((uint8_t *)"  Disable the write protection ------------------------- 4\r\n\n");
             if ((FlashProtection & (FLASHIF_PROTECTION_PCROPENABLED | FLASHIF_PROTECTION_RDPENABLED)) != 0x0)
             {
-                Serial_PutString((uint8_t *)"  The write protection disable will erase all the flash\r\n");
-                Serial_PutString((uint8_t *)"  Please use STlink utility to disable the protection  \r\n\n");
+                //                Serial_PutString((uint8_t *)"  The write protection disable will erase all the flash\r\n");
+                //                Serial_PutString((uint8_t *)"  Please use STlink utility to disable the protection  \r\n\n");
                 while (1)
                     ;
             }
@@ -164,14 +164,13 @@ void Main_Menu(void)
         {
             Serial_PutString((uint8_t *)"  Enable the write protection -------------------------- 4\r\n\n");
         }
-        Serial_PutString((uint8_t *)"==========================================================\r\n\n");
+        //        Serial_PutString((uint8_t *)"==========================================================\r\n\n");
 
         /* Receive key */
+        can_msg_rx_flush();
+
         /* block-wait until receive first byte */
         can_msg_receive(&key, 1, RX_TIMEOUT);
-
-        while (1)
-            ;
 
         switch (key)
         {
@@ -185,6 +184,17 @@ void Main_Menu(void)
                 break;
             case '3':
                 Serial_PutString((uint8_t *)"Start program execution......\r\n\n");
+
+                HAL_Delay(1);
+
+
+                HAL_CAN_DeactivateNotification(&hcan1, CAN_IT_RX_FIFO0_FULL);
+                HAL_CAN_DeInit(&hcan1);
+                HAL_RCC_DeInit();
+                HAL_DeInit();
+
+                HAL_SuspendTick();
+
                 /* execute the new program */
                 JumpAddress = *(__IO uint32_t *)(APPLICATION_ADDRESS + 4);
                 /* Jump to user application */
@@ -225,7 +235,7 @@ void Main_Menu(void)
                 }
                 break;
             default:
-                Serial_PutString((uint8_t *)"Invalid Number ! ==> The number should be either 1, 2, 3 or 4\r");
+                Serial_PutString((uint8_t *)"Invalid Number ! ==> The number should be either 1, 2, 3 or 4\r\n");
                 break;
         }
     }

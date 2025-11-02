@@ -37,6 +37,7 @@
 
 #define CAN_DOWNLOAD_STD_ID (0x230u)
 #define CAN_UPLOAD_STD_ID   (0x232u)
+#define CAN_ACK_ID          (0x555)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -69,6 +70,51 @@ static void MX_CRC_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint32_t         dlc_error_count = 0;
+volatile uint8_t can_silent      = 0;
+
+void can_send_ack(void)
+{
+    CAN_TxHeaderTypeDef tx_header;
+    uint8_t             tx_data[8];
+    uint32_t            tx_mailbox;
+
+    uint32_t tickstart = HAL_GetTick();
+    uint32_t timeout   = 5 * 1000;
+
+    /* Wait until tx buffer is available */
+    while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0u)
+    {
+        /* Check for the Timeout */
+        if (timeout != HAL_MAX_DELAY)
+        {
+            if (((HAL_GetTick() - tickstart) > timeout) || (timeout == 0u))
+            {
+                return;
+            }
+        }
+    }
+
+    tx_header.StdId = CAN_ACK_ID;
+    tx_header.IDE   = CAN_ID_STD;
+    tx_header.RTR   = CAN_RTR_DATA;
+    tx_header.DLC   = 0;
+
+    HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &tx_mailbox);
+}
+
+void can_msg_rx_flush(void)
+{
+    CAN_RxHeaderTypeDef rx_header;
+    uint8_t             rx_data[8];
+
+    /* Wait until msg is received */
+    while (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) != 0u)
+    {
+        HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
+    }
+}
+
 HAL_StatusTypeDef can_msg_receive(uint8_t *pdata, uint32_t length, uint32_t timeout)
 {
     CAN_RxHeaderTypeDef rx_header;
@@ -90,20 +136,28 @@ HAL_StatusTypeDef can_msg_receive(uint8_t *pdata, uint32_t length, uint32_t time
                     return HAL_TIMEOUT;
                 }
             }
+
+            if (can_silent)
+            {
+                can_silent = 0;
+                HAL_GPIO_WritePin(CAN_SILENT_GPIO_Port, CAN_SILENT_Pin, GPIO_PIN_RESET);
+                HAL_CAN_Start(&hcan1);
+            }
         }
 
         HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
 
-        uint8_t bytes_to_copy = (rx_count >= 8u) ? 8u : rx_count;
+        uint8_t bytes_to_copy = rx_header.DLC;
+
         for (uint8_t i = 0u; i < bytes_to_copy; i++)
         {
             *pdata++ = rx_data[i];
         }
 
-        //		for (int i = 0; i < bytes_to_copy; i++)
-        //			ITM_SendChar(rx_data[i]);
-
         rx_count -= bytes_to_copy;
+
+        if (rx_count > 0x1FFFFFFF)    // numero muy grande: error
+            rx_count = 0;
     }
 
     return HAL_OK;
@@ -120,7 +174,7 @@ HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t tim
 
     while (tx_count > 0u)
     {
-        /* Wait until msg is received */
+        /* Wait until tx buffer is available */
         while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0u)
         {
             /* Check for the Timeout */
@@ -205,10 +259,11 @@ int main(void)
         Error_Handler();
     }
 
-    //  HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
+    HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_FULL);
 
     HAL_CAN_Start(&hcan1);    // only for test
-    Main_Menu();              // only for test
+    FLASH_If_Init();
+    Main_Menu();    // only for test
 
     if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) == FW_UPDATE_BYTE_SEQUENCE_1 &&
         HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) == FW_UPDATE_BYTE_SEQUENCE_2)
@@ -271,15 +326,14 @@ void SystemClock_Config(void)
     /** Initializes the RCC Oscillators according to the specified parameters
      * in the RCC_OscInitTypeDef structure.
      */
-    RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_LSI | RCC_OSCILLATORTYPE_MSI;
+    RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_HSI | RCC_OSCILLATORTYPE_LSI;
+    RCC_OscInitStruct.HSIState            = RCC_HSI_ON;
+    RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
     RCC_OscInitStruct.LSIState            = RCC_LSI_ON;
-    RCC_OscInitStruct.MSIState            = RCC_MSI_ON;
-    RCC_OscInitStruct.MSICalibrationValue = 0;
-    RCC_OscInitStruct.MSIClockRange       = RCC_MSIRANGE_6;
     RCC_OscInitStruct.PLL.PLLState        = RCC_PLL_ON;
-    RCC_OscInitStruct.PLL.PLLSource       = RCC_PLLSOURCE_MSI;
+    RCC_OscInitStruct.PLL.PLLSource       = RCC_PLLSOURCE_HSI;
     RCC_OscInitStruct.PLL.PLLM            = 1;
-    RCC_OscInitStruct.PLL.PLLN            = 40;
+    RCC_OscInitStruct.PLL.PLLN            = 10;
     RCC_OscInitStruct.PLL.PLLP            = RCC_PLLP_DIV7;
     RCC_OscInitStruct.PLL.PLLQ            = RCC_PLLQ_DIV2;
     RCC_OscInitStruct.PLL.PLLR            = RCC_PLLR_DIV2;
@@ -323,10 +377,10 @@ static void MX_CAN1_Init(void)
     hcan1.Init.TimeSeg1             = CAN_BS1_14TQ;
     hcan1.Init.TimeSeg2             = CAN_BS2_5TQ;
     hcan1.Init.TimeTriggeredMode    = DISABLE;
-    hcan1.Init.AutoBusOff           = DISABLE;
+    hcan1.Init.AutoBusOff           = ENABLE;
     hcan1.Init.AutoWakeUp           = DISABLE;
     hcan1.Init.AutoRetransmission   = ENABLE;
-    hcan1.Init.ReceiveFifoLocked    = DISABLE;
+    hcan1.Init.ReceiveFifoLocked    = ENABLE;
     hcan1.Init.TransmitFifoPriority = ENABLE;
     if (HAL_CAN_Init(&hcan1) != HAL_OK)
     {
@@ -435,15 +489,14 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+void HAL_CAN_RxFifo0FullCallback(CAN_HandleTypeDef *hcan)
 {
-    CAN_RxHeaderTypeDef rx_header;
-    uint8_t             rx_data[8];
+    HAL_GPIO_WritePin(CAN_SILENT_GPIO_Port, CAN_SILENT_Pin, GPIO_PIN_SET);
+    HAL_CAN_Stop(&hcan1);
 
-    HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
+    dlc_error_count++;
 
-    for (int i = 0; i < rx_header.DLC; i++)
-        ITM_SendChar(rx_data[i]);
+    can_silent = 1;
 }
 /* USER CODE END 4 */
 
