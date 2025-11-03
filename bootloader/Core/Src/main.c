@@ -148,7 +148,7 @@ HAL_StatusTypeDef can_msg_receive(uint8_t *pdata, uint32_t length, uint32_t time
 
         HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
 
-        uint8_t bytes_to_copy = rx_header.DLC;
+        uint8_t bytes_to_copy = (uint8_t)rx_header.DLC;
 
         for (uint8_t i = 0u; i < bytes_to_copy; i++)
         {
@@ -188,7 +188,7 @@ HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t tim
             }
         }
 
-        uint8_t bytes_to_copy = (tx_count >= 8u) ? 8u : tx_count;
+        uint8_t bytes_to_copy = (tx_count >= 8u) ? 8u : (uint8_t)tx_count;
         memset(tx_data, 0, sizeof(tx_data));
 
         for (uint8_t i = 0u; i < bytes_to_copy; i++)
@@ -225,6 +225,8 @@ HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t tim
  */
 bool is_bootloader_mode_requested(void)
 {
+    return true;
+#if 0
     bool bootloader_mode = true;
 
     /* Test if user code is programmed starting from address "APPLICATION_ADDRESS" */
@@ -244,6 +246,7 @@ bool is_bootloader_mode_requested(void)
     }
 
     return bootloader_mode;
+#endif
 }
 
 void main_deinit_peripherals(void)
@@ -292,10 +295,6 @@ int main(void)
     MX_RTC_Init();
     MX_CRC_Init();
     /* USER CODE BEGIN 2 */
-
-    HAL_CAN_Start(&hcan1);    // only for test
-    FLASH_If_Init();
-    Main_Menu();    // only for test
 
     if (is_bootloader_mode_requested())
     {

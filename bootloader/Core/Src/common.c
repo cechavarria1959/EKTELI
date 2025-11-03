@@ -43,7 +43,7 @@ void Int2Str(uint8_t *p_str, uint32_t intnum)
 
     for (i = 0; i < 10; i++)
     {
-        p_str[pos++] = (intnum / divider) + 48;
+        p_str[pos++] = (uint8_t)((intnum / divider) + 48);
 
         intnum = intnum % divider;
         divider /= 10;
