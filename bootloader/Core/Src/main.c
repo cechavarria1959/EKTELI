@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdbool.h>
 #include <string.h>
 #include "menu.h"
 /* USER CODE END Includes */
@@ -207,6 +208,56 @@ HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t tim
 
     return HAL_OK;
 }
+
+/**
+ * @brief Determines if the system should enter bootloader mode.
+ *
+ * This function checks two conditions to decide whether to enter bootloader mode:
+ * 1. It verifies if user application code is present at the specified APPLICATION_ADDRESS
+ *    by comparing the stack pointer value with the expected _estack address.
+ * 2. It checks if a firmware update has been requested by reading specific backup
+ *    registers (RTC_BKP_DR0 and RTC_BKP_DR1) for predefined byte sequences.
+ *    If these sequences match, bootloader mode is requested.
+ *
+ * @return true if bootloader mode is requested or user application is not
+ *      present, or false if user application is present and no bootloader
+ *      request is detected.
+ */
+bool is_bootloader_mode_requested(void)
+{
+    bool bootloader_mode = true;
+
+    /* Test if user code is programmed starting from address "APPLICATION_ADDRESS" */
+    /* WARNING: this assumes both _estack from bootloader and _estack from
+    user application are located at the same address (top of SRAM1 0x2000C000)*/
+    uint32_t tmp = ((*(__IO uint32_t *)APPLICATION_ADDRESS) & 0x3FFF0000);
+    if (tmp == (uint32_t)&_estack)
+    {
+        bootloader_mode = false;
+    }
+
+    /* bootloader mode requested from user application */
+    if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) == FW_UPDATE_BYTE_SEQUENCE_1 &&
+        HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) == FW_UPDATE_BYTE_SEQUENCE_2)
+    {
+        bootloader_mode = true;
+    }
+
+    return bootloader_mode;
+}
+
+void main_deinit_peripherals(void)
+{
+    HAL_RTC_DeInit(&hrtc);
+    HAL_CRC_DeInit(&hcrc);
+    HAL_GPIO_DeInit(CAN_SILENT_GPIO_Port, CAN_SILENT_Pin);
+
+    HAL_CAN_DeactivateNotification(&hcan1, CAN_IT_RX_FIFO0_FULL);
+    HAL_CAN_DeInit(&hcan1);
+
+    HAL_RCC_DeInit();
+    HAL_DeInit();
+}
 /* USER CODE END 0 */
 
 /**
@@ -241,37 +292,13 @@ int main(void)
     MX_RTC_Init();
     MX_CRC_Init();
     /* USER CODE BEGIN 2 */
-    CAN_FilterTypeDef sFilterConfig;
-    sFilterConfig.FilterMode           = CAN_FILTERMODE_IDMASK;
-    sFilterConfig.FilterScale          = CAN_FILTERSCALE_32BIT;
-    sFilterConfig.FilterIdHigh         = 0x0000;
-    sFilterConfig.FilterIdLow          = 0x0000;
-    sFilterConfig.FilterMaskIdHigh     = 0x0000;
-    sFilterConfig.FilterMaskIdLow      = 0x0000;
-    sFilterConfig.SlaveStartFilterBank = 14;
-    sFilterConfig.FilterBank           = 0;
-    sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
-    sFilterConfig.FilterActivation     = CAN_FILTER_ENABLE;
-
-    if (HAL_CAN_ConfigFilter(&hcan1, &sFilterConfig) != HAL_OK)
-    {
-        /* Filter configuration Error */
-        Error_Handler();
-    }
-
-    HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_FULL);
 
     HAL_CAN_Start(&hcan1);    // only for test
     FLASH_If_Init();
     Main_Menu();    // only for test
 
-    if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) == FW_UPDATE_BYTE_SEQUENCE_1 &&
-        HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) == FW_UPDATE_BYTE_SEQUENCE_2)
+    if (is_bootloader_mode_requested())
     {
-        /* Reset backup registers and initialize bootloader */
-        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0x00000000);
-        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0x00000000);
-
         FLASH_If_Init();
         HAL_CAN_Start(&hcan1);
 
@@ -279,20 +306,16 @@ int main(void)
     }
     else
     {
-        HAL_CAN_DeInit(&hcan1);
+        main_deinit_peripherals();
+        HAL_SuspendTick();
 
-        /* Test if user code is programmed starting from address "APPLICATION_ADDRESS" */
-        uint32_t tmp = ((*(__IO uint32_t *)APPLICATION_ADDRESS) & 0x2FFE0000);
-        if (tmp == (uint32_t)&_estack)
-        {
-            /* Initialize user application's Stack Pointer & Jump to user application */
-            JumpAddress = *(__IO uint32_t *)(APPLICATION_ADDRESS + 4);
+        /* Initialize user application's Stack Pointer & Jump to user application */
+        JumpAddress = *(__IO uint32_t *)(APPLICATION_ADDRESS + 4);
 
-            JumpToApplication = (pFunction)JumpAddress;
+        JumpToApplication = (pFunction)JumpAddress;
 
-            __set_MSP(*(__IO uint32_t *)APPLICATION_ADDRESS);
-            JumpToApplication();
-        }
+        __set_MSP(*(__IO uint32_t *)APPLICATION_ADDRESS);
+        JumpToApplication();
     }
     /* USER CODE END 2 */
 
@@ -387,6 +410,25 @@ static void MX_CAN1_Init(void)
         Error_Handler();
     }
     /* USER CODE BEGIN CAN1_Init 2 */
+
+    CAN_FilterTypeDef sFilterConfig;
+    sFilterConfig.FilterMode           = CAN_FILTERMODE_IDMASK;
+    sFilterConfig.FilterScale          = CAN_FILTERSCALE_32BIT;
+    sFilterConfig.FilterIdHigh         = 0x0000;
+    sFilterConfig.FilterIdLow          = 0x0000;
+    sFilterConfig.FilterMaskIdHigh     = 0x0000;
+    sFilterConfig.FilterMaskIdLow      = 0x0000;
+    sFilterConfig.SlaveStartFilterBank = 14;
+    sFilterConfig.FilterBank           = 0;
+    sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
+    sFilterConfig.FilterActivation     = CAN_FILTER_ENABLE;
+
+    if (HAL_CAN_ConfigFilter(&hcan1, &sFilterConfig) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_FULL);
 
     /* USER CODE END CAN1_Init 2 */
 }
@@ -491,6 +533,8 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_CAN_RxFifo0FullCallback(CAN_HandleTypeDef *hcan)
 {
+    UNUSED(hcan);
+
     HAL_GPIO_WritePin(CAN_SILENT_GPIO_Port, CAN_SILENT_Pin, GPIO_PIN_SET);
     HAL_CAN_Stop(&hcan1);
 

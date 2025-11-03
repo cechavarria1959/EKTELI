@@ -70,6 +70,10 @@ void SerialDownload(void)
         Serial_PutString(number);
         Serial_PutString((uint8_t *)" Bytes\r\n");
         //        Serial_PutString((uint8_t *)"-------------------\n");
+
+        /* Reset backup registers */
+        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0x00000000);
+        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0x00000000);
     }
     else if (result == COM_LIMIT)
     {
@@ -178,21 +182,17 @@ void Main_Menu(void)
                 /* Download user application in the Flash */
                 SerialDownload();
                 break;
+
             case '2':
                 /* Upload user application from the Flash */
                 SerialUpload();
                 break;
+
             case '3':
                 Serial_PutString((uint8_t *)"Start program execution......\r\n\n");
-
                 HAL_Delay(1);
 
-
-                HAL_CAN_DeactivateNotification(&hcan1, CAN_IT_RX_FIFO0_FULL);
-                HAL_CAN_DeInit(&hcan1);
-                HAL_RCC_DeInit();
-                HAL_DeInit();
-
+                main_deinit_peripherals();
                 HAL_SuspendTick();
 
                 /* execute the new program */
@@ -203,6 +203,7 @@ void Main_Menu(void)
                 __set_MSP(*(__IO uint32_t *)APPLICATION_ADDRESS);
                 JumpToApplication();
                 break;
+
             case '4':
                 if (FlashProtection != FLASHIF_PROTECTION_NONE)
                 {

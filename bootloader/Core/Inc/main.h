@@ -40,6 +40,7 @@ extern "C"
     /* USER CODE BEGIN ET */
     extern CAN_HandleTypeDef hcan1;
     extern CRC_HandleTypeDef hcrc;
+    extern RTC_HandleTypeDef hrtc;
     /* USER CODE END ET */
 
     /* Exported constants --------------------------------------------------------*/
@@ -56,7 +57,9 @@ extern "C"
     void Error_Handler(void);
 
     /* USER CODE BEGIN EFP */
-    void              can_msg_rx_flush(void);
+    void main_deinit_peripherals(void);
+    void can_msg_rx_flush(void);
+
     HAL_StatusTypeDef can_msg_receive(uint8_t *pdata, uint32_t length, uint32_t timeout);
     HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t timeout);
 
