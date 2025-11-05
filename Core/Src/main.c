@@ -166,7 +166,7 @@ HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t tim
 
     while (tx_count > 0u)
     {
-        /* Wait until msg is received */
+        /* Wait until tx buffer is available */
         while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0u)
         {
             /* Check for the Timeout */
@@ -179,7 +179,7 @@ HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t tim
             }
         }
 
-        uint8_t bytes_to_copy = (tx_count >= 8u) ? 8u : tx_count;
+        uint8_t bytes_to_copy = (tx_count >= 8u) ? 8u : (uint8_t)tx_count;
         memset(tx_data, 0, sizeof(tx_data));
 
         for (uint8_t i = 0u; i < bytes_to_copy; i++)
@@ -579,9 +579,19 @@ int main(void)
 
     HAL_CAN_Start(&hcan1);
 
-    can_msg_transmit((uint8_t *)opening_msg, sizeof(opening_msg), HAL_MAX_DELAY);
+    can_msg_transmit((uint8_t *)opening_msg, strlen(opening_msg), HAL_MAX_DELAY);
 
-    can_decode_cmd();
+    if (version == 2)
+    {
+        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0);
+        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0);
+    }
+
+    while (1)
+    {
+        can_decode_cmd();
+        HAL_Delay(10);
+    }
 
     rx_msg.data[0] = version;
 
@@ -774,8 +784,8 @@ static void MX_CAN1_Init(void)
     hcan1.Init.TimeSeg1             = CAN_BS1_14TQ;
     hcan1.Init.TimeSeg2             = CAN_BS2_5TQ;
     hcan1.Init.TimeTriggeredMode    = DISABLE;
-    hcan1.Init.AutoBusOff           = DISABLE;
-    hcan1.Init.AutoWakeUp           = DISABLE;
+    hcan1.Init.AutoBusOff           = ENABLE;
+    hcan1.Init.AutoWakeUp           = ENABLE;
     hcan1.Init.AutoRetransmission   = ENABLE;
     hcan1.Init.ReceiveFifoLocked    = DISABLE;
     hcan1.Init.TransmitFifoPriority = ENABLE;
@@ -802,6 +812,8 @@ static void MX_CAN1_Init(void)
         /* Filter configuration Error */
         Error_Handler();
     }
+
+    HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 
     /* USER CODE END CAN1_Init 2 */
 }
@@ -1053,10 +1065,11 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
-    can_message_t msg;
-    HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &msg.header, msg.data);
+    // can_message_t msg;
+    // HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &msg.header, msg.data);
+    HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &rx_msg.header, rx_msg.data);
 
-    osMessageQueuePut(CANQueueHandle, &msg, 0, 0);
+    // osMessageQueuePut(CANQueueHandle, &msg, 0, 0);
     __NOP();
 }
 

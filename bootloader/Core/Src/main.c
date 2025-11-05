@@ -225,14 +225,12 @@ HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t tim
  */
 bool is_bootloader_mode_requested(void)
 {
-    return true;
-#if 0
     bool bootloader_mode = true;
 
     /* Test if user code is programmed starting from address "APPLICATION_ADDRESS" */
     /* WARNING: this assumes both _estack from bootloader and _estack from
     user application are located at the same address (top of SRAM1 0x2000C000)*/
-    uint32_t tmp = ((*(__IO uint32_t *)APPLICATION_ADDRESS) & 0x3FFF0000);
+    uint32_t tmp = ((*(__IO uint32_t *)APPLICATION_ADDRESS) & 0x3FFFF000);
     if (tmp == (uint32_t)&_estack)
     {
         bootloader_mode = false;
@@ -246,7 +244,6 @@ bool is_bootloader_mode_requested(void)
     }
 
     return bootloader_mode;
-#endif
 }
 
 void main_deinit_peripherals(void)
