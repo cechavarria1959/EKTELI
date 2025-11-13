@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "bms.h"
+#include "can_messages.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -66,6 +67,8 @@ typedef enum
 
 #define FW_UPDATE_BYTE_SEQUENCE_1 (0x5555AAAA)
 #define FW_UPDATE_BYTE_SEQUENCE_2 (0xAAAA5555)
+
+#define CAN_ID_BMS (0x10)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -112,6 +115,13 @@ const osThreadAttr_t CANMonitor_attributes = {
     .stack_size = 128 * 4,
     .priority   = (osPriority_t)osPriorityLow,
 };
+/* Definitions for bms_task */
+osThreadId_t         bms_taskHandle;
+const osThreadAttr_t bms_task_attributes = {
+    .name       = "bms_task",
+    .stack_size = 128 * 4,
+    .priority   = (osPriority_t)osPriorityLow,
+};
 /* Definitions for CANQueue */
 osMessageQueueId_t         CANQueueHandle;
 const osMessageQueueAttr_t CANQueue_attributes = {
@@ -148,6 +158,7 @@ void        StartDefaultTask(void *argument);
 void        bms_monitor(void *argument);
 void        fuel_gauge_monitor(void *argument);
 void        can_monitor(void *argument);
+void        bms_main_task(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -155,7 +166,7 @@ void        can_monitor(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t timeout)
+HAL_StatusTypeDef can_msg_transmit(uint32_t can_id, uint8_t *pdata, uint32_t length, uint32_t timeout)
 {
     CAN_TxHeaderTypeDef tx_header;
     uint8_t             tx_data[8];
@@ -189,7 +200,7 @@ HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t tim
 
         tx_count -= bytes_to_copy;
 
-        tx_header.StdId = 0x123;
+        tx_header.StdId = can_id;
         tx_header.IDE   = CAN_ID_STD;
         tx_header.RTR   = CAN_RTR_DATA;
         tx_header.DLC   = bytes_to_copy;
@@ -503,38 +514,76 @@ void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
  *     to RTC backup registers and triggering a system reset, app starts in
  *     bootloader mode.
  */
-void can_decode_cmd(void)
+void can_decode_cmd(can_message_t *msg)
 {
-    can_command_t cmd = rx_msg.data[0];
-
-    switch (cmd)
+    if (msg->header.RTR == CAN_RTR_DATA)
     {
-        case GET_VOLTAGE:
-            /* todo */
-            break;
+        switch (msg->header.StdId)
+        {
+            case CAN_ID_BMS_STATE:
+                can_command_t cmd = (can_command_t)msg->data[0];
+                can_msg_transmit(CAN_ID_BMS_STATE, NULL, 0, 100u);
+                break;
 
-        case GET_CURRENT:
-            /* todo */
-            break;
+            case CAN_ID_BMS_BALANCE:
+                can_command_t cmd = (can_command_t)msg->data[0];
+                can_msg_transmit(CAN_ID_BMS_BALANCE, NULL, 0, 100u);
+                break;
 
-        case GET_SOH:
-            /* todo */
-            break;
+            case CAN_ID_BMS_SET_PROTECTIONS:
+                can_msg_transmit(CAN_ID_BMS_SET_PROTECTIONS, NULL, 0, 100u);
+                break;
 
-        case GET_SOC:
-            /* todo */
-            break;
+            case CAN_ID_BMS_RESET:
+                can_msg_transmit(CAN_ID_BMS_RESET, NULL, 0, 100u);
+                HAL_NVIC_SystemReset();
+                break;
 
-        case FW_UPDATE:
-            HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, FW_UPDATE_BYTE_SEQUENCE_1);
-            HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, FW_UPDATE_BYTE_SEQUENCE_2);
-            HAL_Delay(1);
-            HAL_NVIC_SystemReset();
-            break;
+            case CAN_ID_FW_UPDATE:
+                if (msg->data[0] == CAN_ID_BMS)
+                {
+                    can_msg_transmit(CAN_ID_FW_UPDATE, NULL, 0, 100u);
+                    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, FW_UPDATE_BYTE_SEQUENCE_1);
+                    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, FW_UPDATE_BYTE_SEQUENCE_2);
+                    HAL_Delay(1);
+                    HAL_NVIC_SystemReset();
+                }
+                break;
 
-        default:
-            break;
+            default:
+                break;
+        }
     }
+    else    // RTR Request frame
+    {
+        switch (msg->header.StdId)
+        {
+            case CAN_ID_BMS_GET_PROTECTIONS:
+                can_msg_transmit(CAN_ID_BMS_PROTECTIONS, NULL, 0, 100u);
+                break;
+
+            case CAN_ID_BMS_GET_FAULTS:
+                can_msg_transmit(CAN_ID_BMS_FAULTS, NULL, 0, 100u);
+                break;
+
+            case CAN_ID_BMS_GET_FW_VER:
+                transmit_fw_version();
+                break;
+
+            default:
+                break;
+        }
+    }
+}
+
+void transmit_fw_version(void)
+{
+    /* Get Firmware Version */
+
+    /* Get 32bit CRC Flash Memory value */
+
+    /* Transmit on CAN */
+    can_msg_transmit(CAN_ID_BMS_FW_VER, (uint8_t *)&version, 1, 100u);
 }
 
 volatile uint8_t version = 1;
@@ -593,7 +642,7 @@ int main(void)
         HAL_Delay(10);
     }
 
-    rx_msg.data[0] = version;
+    transmit_fw_version();
 
     Subcommands(ADDR_DEVICE_NUMBER, 0, 0);
     //  CommandSubcommands(ADDR_DEVICE_NUMBER);
@@ -688,6 +737,9 @@ int main(void)
 
     /* creation of CANMonitor */
     CANMonitorHandle = osThreadNew(can_monitor, NULL, &CANMonitor_attributes);
+
+    /* creation of bms_task */
+    bms_taskHandle = osThreadNew(bms_main_task, NULL, &bms_task_attributes);
 
     /* USER CODE BEGIN RTOS_THREADS */
     /* add threads, ... */
@@ -1065,11 +1117,16 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
-    // can_message_t msg;
-    // HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &msg.header, msg.data);
-    HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &rx_msg.header, rx_msg.data);
+    can_message_t msg;
 
-    // osMessageQueuePut(CANQueueHandle, &msg, 0, 0);
+    uint8_t msgcount = HAL_CAN_GetRxFifoFillLevel(hcan, CAN_RX_FIFO0);
+
+    while (msgcount-- > 0)
+    {
+        HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &msg.header, msg.data);
+        osMessageQueuePut(CANQueueHandle, &msg, 0, 0);
+    }
+
     __NOP();
 }
 
@@ -1152,12 +1209,38 @@ void can_monitor(void *argument)
     {
         if (osMessageQueueGet(CANQueueHandle, &msg, NULL, osWaitForever) == osOK)
         {
-            // Procesa el mensaje aquí
-            // Ejemplo: analizar msg.header.StdId, msg.data, etc.
+            can_decode_cmd(&msg);
         }
-        osDelay(1);
+        osDelay(pdMS_TO_TICKS(10));
     }
     /* USER CODE END can_monitor */
+}
+
+/* USER CODE BEGIN Header_bms_main_task */
+/**
+ * @brief Function implementing the bms_task thread.
+ * @param argument: Not used
+ * @retval None
+ */
+/* USER CODE END Header_bms_main_task */
+void bms_main_task(void *argument)
+{
+    /* USER CODE BEGIN bms_main_task */
+    /* Infinite loop */
+    for (;;)
+    {
+        /* Send Battery Status */
+        can_msg_transmit(CAN_ID_BATTERY_STATUS, (uint8_t *)&version, 1, 100u);
+
+        /* Send BMS Safety & Alarm Flags */
+        can_msg_transmit(CAN_ID_BMS_SAFETY, (uint8_t *)&version, 1, 100u);
+
+        /* Send BMS Operating Status */
+        can_msg_transmit(CAN_ID_BMS_OPERATION, (uint8_t *)&version, 1, 100u);
+
+        osDelay(pdMS_TO_TICKS(500));
+    }
+    /* USER CODE END bms_main_task */
 }
 
 /**
