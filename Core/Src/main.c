@@ -501,18 +501,18 @@ void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
 
 
 /**
- * @brief Decodes and processes CAN bus commands received in rx_msg.
+ * @brief Decodes and processes incoming CAN bus commands.
  *
- * This function reads the command from the first byte of the CAN message data,
- * and executes the corresponding action based on the command type.
- * Supported commands include:
- *   - GET_VOLTAGE: Retrieve battery voltage (implementation pending).
- *   - GET_CURRENT: Retrieve battery current (implementation pending).
- *   - GET_SOH: Retrieve State of Health (implementation pending).
- *   - GET_SOC: Retrieve State of Charge (implementation pending).
- *   - FW_UPDATE: Initiate firmware update sequence by writing specific values
- *     to RTC backup registers and triggering a system reset, app starts in
- *     bootloader mode.
+ * This function handles CAN messages received by the BMS. It distinguishes between
+ * data frames and remote transmission request (RTR) frames, and processes each
+ * message according to its standard identifier (StdId).
+ *
+ * For RTR frames:
+ *   - CAN_ID_BMS_GET_PROTECTIONS: Responds with current protection settings.
+ *   - CAN_ID_BMS_GET_FAULTS: Responds with current fault status.
+ *   - CAN_ID_BMS_GET_FW_VER: Responds with the current firmware version.
+ *
+ * @param msg Pointer to the received CAN message structure.
  */
 void can_decode_cmd(can_message_t *msg)
 {
