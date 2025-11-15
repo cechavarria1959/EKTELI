@@ -69,6 +69,9 @@ typedef enum
 #define FW_UPDATE_BYTE_SEQUENCE_2 (0xAAAA5555)
 
 #define CAN_ID_BMS (0x10)
+
+#define APPLICATION_ADDRESS (0x08004000u) //Defined in linker script FLASH ORIGIN
+#define FLASH_LENGTH        (0x0001C000u) //Defined in linker script FLASH LENGTH
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -78,6 +81,8 @@ typedef enum
 
 /* Private variables ---------------------------------------------------------*/
 CAN_HandleTypeDef hcan1;
+
+CRC_HandleTypeDef hcrc;
 
 DAC_HandleTypeDef hdac1;
 
@@ -154,6 +159,7 @@ static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_RTC_Init(void);
+static void MX_CRC_Init(void);
 void        StartDefaultTask(void *argument);
 void        bms_monitor(void *argument);
 void        fuel_gauge_monitor(void *argument);
@@ -161,7 +167,7 @@ void        can_monitor(void *argument);
 void        bms_main_task(void *argument);
 
 /* USER CODE BEGIN PFP */
-
+void transmit_fw_version(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -518,15 +524,17 @@ void can_decode_cmd(can_message_t *msg)
 {
     if (msg->header.RTR == CAN_RTR_DATA)
     {
+        can_command_t cmd; UNUSED(cmd);
+
         switch (msg->header.StdId)
         {
             case CAN_ID_BMS_STATE:
-                can_command_t cmd = (can_command_t)msg->data[0];
+                cmd = (can_command_t)msg->data[0];
                 can_msg_transmit(CAN_ID_BMS_STATE, NULL, 0, 100u);
                 break;
 
             case CAN_ID_BMS_BALANCE:
-                can_command_t cmd = (can_command_t)msg->data[0];
+                cmd = (can_command_t)msg->data[0];
                 can_msg_transmit(CAN_ID_BMS_BALANCE, NULL, 0, 100u);
                 break;
 
@@ -576,17 +584,26 @@ void can_decode_cmd(can_message_t *msg)
     }
 }
 
+volatile uint16_t version = 100;    //e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
+
 void transmit_fw_version(void)
 {
+    uint8_t buffer[6];
+
     /* Get Firmware Version */
+    buffer[0] = (version >> 8) & 0xFF;
+    buffer[1] = version & 0xFF;
 
     /* Get 32bit CRC Flash Memory value */
+    uint32_t crc_value = HAL_CRC_Calculate(&hcrc, (uint32_t *)APPLICATION_ADDRESS, FLASH_LENGTH  / 4);
+    buffer[2] = (crc_value >> 24) & 0xFF;
+    buffer[3] = (crc_value >> 16) & 0xFF;
+    buffer[4] = (crc_value >> 8) & 0xFF;
+    buffer[5] = crc_value & 0xFF;
 
     /* Transmit on CAN */
-    can_msg_transmit(CAN_ID_BMS_FW_VER, (uint8_t *)&version, 1, 100u);
+    can_msg_transmit(CAN_ID_BMS_FW_VER, buffer, 6, 100u);
 }
-
-volatile uint8_t version = 1;
 
 char opening_msg[] = "\r\n\r\nEKTELI BMS, version 1.0\r\n";
 /* USER CODE END 0 */
@@ -624,12 +641,14 @@ int main(void)
     MX_SPI1_Init();
     MX_DAC1_Init();
     MX_RTC_Init();
+    MX_CRC_Init();
     /* USER CODE BEGIN 2 */
 
     HAL_CAN_Start(&hcan1);
 
-    can_msg_transmit((uint8_t *)opening_msg, strlen(opening_msg), HAL_MAX_DELAY);
+    can_msg_transmit(CAN_ID_BMS, (uint8_t *)opening_msg, strlen(opening_msg), HAL_MAX_DELAY);
 
+#if 0
     if (version == 2)
     {
         HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0);
@@ -641,6 +660,7 @@ int main(void)
         can_decode_cmd();
         HAL_Delay(10);
     }
+#endif
 
     transmit_fw_version();
 
@@ -868,6 +888,35 @@ static void MX_CAN1_Init(void)
     HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 
     /* USER CODE END CAN1_Init 2 */
+}
+
+/**
+ * @brief CRC Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_CRC_Init(void)
+{
+    /* USER CODE BEGIN CRC_Init 0 */
+
+    /* USER CODE END CRC_Init 0 */
+
+    /* USER CODE BEGIN CRC_Init 1 */
+
+    /* USER CODE END CRC_Init 1 */
+    hcrc.Instance                     = CRC;
+    hcrc.Init.DefaultPolynomialUse    = DEFAULT_POLYNOMIAL_ENABLE;
+    hcrc.Init.DefaultInitValueUse     = DEFAULT_INIT_VALUE_ENABLE;
+    hcrc.Init.InputDataInversionMode  = CRC_INPUTDATA_INVERSION_NONE;
+    hcrc.Init.OutputDataInversionMode = CRC_OUTPUTDATA_INVERSION_DISABLE;
+    hcrc.InputDataFormat              = CRC_INPUTDATA_FORMAT_WORDS;
+    if (HAL_CRC_Init(&hcrc) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    /* USER CODE BEGIN CRC_Init 2 */
+
+    /* USER CODE END CRC_Init 2 */
 }
 
 /**
