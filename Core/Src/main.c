@@ -162,6 +162,7 @@ uint8_t value_SafetyStatusC;    // Safety Status Register C
 uint8_t value_PFStatusA;        // Permanent Fail Status Register A
 uint8_t value_PFStatusB;        // Permanent Fail Status Register B
 uint8_t value_PFStatusC;        // Permanent Fail Status Register C
+uint8_t FET_Status;             // FET Status register contents  - Shows states of FETs
 
 uint8_t UV_Fault = 0;    // under-voltage fault state
 uint8_t OV_Fault = 0;    // over-voltage fault state
@@ -171,6 +172,9 @@ uint8_t PF_Fault = 0;    // permanent-fault state
 
 uint8_t ProtectionsTriggered    = 0;    // Set to 1 if any protection triggers
 uint8_t PermanentFaultTriggered = 0;    // Set to 1 if any permanent fault triggers
+
+uint8_t DSG = 0;    // discharge FET state
+uint8_t CHG = 0;    // charge FET state
 
 can_message_t rx_msg;
 
@@ -671,6 +675,15 @@ uint16_t BQ769x2_ReadAlarmStatus()
     // Read this register to find out why the ALERT pin was asserted
     DirectCommands(ADDR_ALARM_STATUS, 0x00, R);
     return (rxdata[1] * 256 + rxdata[0]);
+}
+
+void BQ769x2_ReadFETStatus()
+{
+    // Read FET Status to see which FETs are enabled
+    DirectCommands(ADDR_FET_STATUS, 0x00, R);
+    FET_Status = (rxdata[1] * 256 + rxdata[0]);
+    DSG        = ((0x4 & rxdata[0]) >> 2);    // discharge FET state
+    CHG        = (0x1 & rxdata[0]);           // charge FET state
 }
 
 
@@ -1542,6 +1555,20 @@ void bms_main_task(void *argument)
         buffer[2] = max_discharge_current & 0xFF;
         buffer[3] = (max_charge_current >> 8) & 0xFF;
         buffer[4] = max_charge_current & 0xFF;
+
+        buffer[5] = 0u;    // Charger status. TODO: implement charger status detection
+
+        if (ProtectionsTriggered || PermanentFaultTriggered)
+        {
+            buffer[6] = 3u;    // BMS in Fault State
+        }
+        else
+        {
+            buffer[6] = 1u;    // BMS Operating Normally
+        }
+
+        BQ769x2_ReadFETStatus();
+        buffer[7] = (CHG << 1) | DSG;
 
         can_msg_transmit(CAN_ID_BMS_OPERATION, (uint8_t *)&buffer, 1, 100u);
 

@@ -30,6 +30,7 @@ typedef enum
     ADDR_ALARM_ENABLE         = 0x66,
     ADDR_INTERNAL_TEMP        = 0x68,
     ADDR_THERMISTOR_TEMP      = 0x6A,    // hasta 0x7A
+    ADDR_FET_STATUS           = 0x7F,
     ADDR_DEVICE_NUMBER        = 0x0001,
     ADDR_FW_VERSION           = 0x0002,
     ADDR_HW_VERSION           = 0x0003,
