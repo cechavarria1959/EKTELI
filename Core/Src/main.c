@@ -148,12 +148,29 @@ osSemaphoreId_t         semaphore_1Handle;
 const osSemaphoreAttr_t semaphore_1_attributes = {
     .name = "semaphore_1"};
 /* USER CODE BEGIN PV */
-uint16_t AlarmBits            = 0x00;
-float    Temperature[3]       = {0, 0, 0};
-uint16_t Pack_Current         = 0x00;
-uint8_t  ProtectionsTriggered = 0;    // Set to 1 if any protection triggers
-uint8_t  rxdata[4];
-uint8_t  RX_32Byte[32] = {0x00};
+uint16_t AlarmBits       = 0x00;
+float    Temperature[3]  = {0.0f};
+uint16_t Pack_Current    = 0x00;
+uint16_t CellVoltage[16] = {0};
+
+uint8_t rxdata[4];
+uint8_t RX_32Byte[32] = {0x00};
+
+uint8_t value_SafetyStatusA;    // Safety Status Register A
+uint8_t value_SafetyStatusB;    // Safety Status Register B
+uint8_t value_SafetyStatusC;    // Safety Status Register C
+uint8_t value_PFStatusA;        // Permanent Fail Status Register A
+uint8_t value_PFStatusB;        // Permanent Fail Status Register B
+uint8_t value_PFStatusC;        // Permanent Fail Status Register C
+
+uint8_t UV_Fault = 0;    // under-voltage fault state
+uint8_t OV_Fault = 0;    // over-voltage fault state
+uint8_t OT_Fault = 0;    // over-temperature fault state
+uint8_t OC_Fault = 0;    // over-current fault state
+uint8_t PF_Fault = 0;    // permanent-fault state
+
+uint8_t ProtectionsTriggered    = 0;    // Set to 1 if any protection triggers
+uint8_t PermanentFaultTriggered = 0;    // Set to 1 if any permanent fault triggers
 
 can_message_t rx_msg;
 
@@ -518,17 +535,55 @@ uint16_t BQ769x2_ReadVoltage(uint8_t command)
 {
     // RX_data is global var
     DirectCommands(command, 0x00, R);
-#if 0
-	if(command >= Cell1Voltage && command <= Cell16Voltage) {//Cells 1 through 16 (0x14 to 0x32)
-		return (RX_data[1]*256 + RX_data[0]); //voltage is reported in mV
-	}
-	else {//stack, Pack, LD
-		return 10 * (RX_data[1]*256 + RX_data[0]); //voltage is reported in 0.01V units
-	}
-#endif
-    // voltage is reported in 0.01V (centivolts) units by default,
-    //(Settings:Configuration:DA Configuration USER_VOLTS_CV in TRM)
-    return 10 * (rxdata[1] * 256 + rxdata[0]);
+
+    if (command >= ADDR_CELL_VOLTAGES && command <= (ADDR_CELL_VOLTAGES + (15 * 2)))    // Cells 1 through 16 (0x14 to 0x32)
+    {
+        return (rxdata[1] * 256 + rxdata[0]);    // voltage is reported in mV
+    }
+    else
+    {
+        // voltage is reported in 0.01V (centivolts) units by default,
+        //(Settings:Configuration:DA Configuration USER_VOLTS_CV in TRM)
+        return 10 * (rxdata[1] * 256 + rxdata[0]);
+    }
+}
+
+uint16_t BQ769x2_Readcell_voltages(void)
+{
+    int cellvoltageholder = ADDR_CELL_VOLTAGES;    // Cell1Voltage is 0x14
+    for (int x = 0; x < 16; x++)
+    {    // Reads all cell voltages
+        CellVoltage[x] = BQ769x2_ReadVoltage(cellvoltageholder);
+        cellvoltageholder += 2;
+    }
+}
+
+uint16_t get_smallest_cell_voltage()
+{
+    uint16_t smallest_voltage = 0xFFFF;
+    for (int i = 0; i < 16; i++)
+    {
+        if (CellVoltage[i] < smallest_voltage)
+        {
+            smallest_voltage = CellVoltage[i];
+        }
+    }
+
+    return smallest_voltage;
+}
+
+uint16_t get_largest_cell_voltage()
+{
+    uint16_t largest_voltage = 0x0000;
+    for (int i = 0; i < 16; i++)
+    {
+        if (CellVoltage[i] > largest_voltage)
+        {
+            largest_voltage = CellVoltage[i];
+        }
+    }
+
+    return largest_voltage;
 }
 
 int16_t BQ769x2_ReadCurrent()
@@ -543,6 +598,79 @@ float BQ769x2_ReadTemperature(uint8_t command)
     DirectCommands(command, 0x00, R);
     // RX_data is a global var
     return (0.1 * (float)(rxdata[1] * 256 + rxdata[0])) - 273.15;    // converts from 0.1K to Celcius
+}
+
+void BQ769x2_ReadSafetyStatus()
+{    // good example functions
+    // Read Safety Status A/B/C and find which bits are set
+    // This shows which primary protections have been triggered
+    DirectCommands(ADDR_SAFETY_STATUS_A, 0x00, R);
+    value_SafetyStatusA = (rxdata[1] * 256 + rxdata[0]);
+    // Example Fault Flags
+    OV_Fault = ((0x8 & rxdata[0]) >> 3);
+    UV_Fault = ((0x4 & rxdata[0]) >> 2);
+    // SCD_Fault = ((0x8 & rxdata[1])>>3);
+    // OCD_Fault = ((0x2 & rxdata[1])>>1);
+    if (rxdata[0] & 0xF0 != 0)    // check if any over-current bits are set
+    {
+        OC_Fault = 1;
+    }
+    else
+    {
+        OC_Fault = 0;
+    }
+
+    DirectCommands(ADDR_SAFETY_STATUS_B, 0x00, R);
+    value_SafetyStatusB = (rxdata[1] * 256 + rxdata[0]);
+    if (rxdata[0] & 0xF0 != 0)    // check if any over-temperature bits are set
+    {
+        OT_Fault = 1;
+    }
+    else
+    {
+        OT_Fault = 0;
+    }
+
+    /* Safety Status C needed? */
+    // DirectCommands(ADDR_SAFETY_STATUS_C, 0x00, R);
+    // value_SafetyStatusC = (rxdata[1] * 256 + rxdata[0]);
+
+    if ((value_SafetyStatusA + value_SafetyStatusB + value_SafetyStatusC) > 0)
+    {
+        ProtectionsTriggered = 1;
+    }
+    else
+    {
+        ProtectionsTriggered = 0;
+    }
+}
+
+void BQ769x2_ReadPFStatus()
+{
+    // Read Permanent Fail Status A/B/C and find which bits are set
+    // This shows which permanent failures have been triggered
+    DirectCommands(ADDR_PF_STATUS_A, 0x00, R);
+    value_PFStatusA = (rxdata[1] * 256 + rxdata[0]);
+    DirectCommands(ADDR_PF_STATUS_B, 0x00, R);
+    value_PFStatusB = (rxdata[1] * 256 + rxdata[0]);
+    DirectCommands(ADDR_PF_STATUS_C, 0x00, R);
+    value_PFStatusC = (rxdata[1] * 256 + rxdata[0]);
+
+    if ((value_PFStatusA + value_PFStatusB + value_PFStatusC) > 0)
+    {
+        PermanentFaultTriggered = 1;
+    }
+    else
+    {
+        PermanentFaultTriggered = 0;
+    }
+}
+
+uint16_t BQ769x2_ReadAlarmStatus()
+{
+    // Read this register to find out why the ALERT pin was asserted
+    DirectCommands(ADDR_ALARM_STATUS, 0x00, R);
+    return (rxdata[1] * 256 + rxdata[0]);
 }
 
 
@@ -1352,7 +1480,48 @@ void bms_main_task(void *argument)
         can_msg_transmit(CAN_ID_BATTERY_STATUS, (uint8_t *)&buffer, 8, 100u);
 
         /* Send BMS Safety & Alarm Flags */
-        can_msg_transmit(CAN_ID_BMS_SAFETY, (uint8_t *)&version, 1, 100u);
+        BQ769x2_ReadSafetyStatus();
+        BQ769x2_ReadPFStatus();
+        uint16_t min_voltage = get_smallest_cell_voltage();
+        uint16_t max_voltage = get_largest_cell_voltage();
+        float    max_temp    = Temperature[0] > Temperature[1] ? Temperature[0] : Temperature[1];
+        if (max_temp < -40.0f)
+        {
+            max_temp = -40.0f;
+        }
+        if (max_temp > 215.0f)
+        {
+            max_temp = 215.0f;
+        }
+
+        AlarmBits = BQ769x2_ReadAlarmStatus();
+        uint8_t fuse_ok;
+        if (AlarmBits & 0x0008)
+        {
+            fuse_ok = 0;    // blown
+        }
+        else
+        {
+            fuse_ok = 1;    // ok
+        }
+
+        if (!ProtectionsTriggered && !PermanentFaultTriggered)
+        {
+            buffer[0] = 0;
+        }
+        else
+        {
+            buffer[0] = (PF_Fault << 4) | (OC_Fault << 3) | (OT_Fault << 2) | (UV_Fault << 1) | OV_Fault;
+        }
+
+        buffer[1] = (min_voltage >> 8) & 0xFF;
+        buffer[2] = min_voltage & 0xFF;
+        buffer[3] = (max_voltage >> 8) & 0xFF;
+        buffer[4] = max_voltage & 0xFF;
+        buffer[5] = (uint8_t)(max_temp + 40.0f);
+        buffer[6] = fuse_ok;
+
+        can_msg_transmit(CAN_ID_BMS_SAFETY, (uint8_t *)&buffer, 8, 100u);
 
         /* Send BMS Operating Status */
         can_msg_transmit(CAN_ID_BMS_OPERATION, (uint8_t *)&version, 1, 100u);

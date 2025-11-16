@@ -12,7 +12,13 @@ typedef enum
 {
     ADDR_CONTROL_STATUS       = 0x00,
     ADDR_SAFETY_ALERT_STATUS  = 0x02,    // hasta 0x07
+    ADDR_SAFETY_STATUS_A      = 0x03,
+    ADDR_SAFETY_STATUS_B      = 0x05,
+    ADDR_SAFETY_STATUS_C      = 0x07,
     ADDR_PF_ALERT_STATUS      = 0x0A,    // hasta 0x11
+    ADDR_PF_STATUS_A          = 0x0B,
+    ADDR_PF_STATUS_B          = 0x0D,
+    ADDR_PF_STATUS_C          = 0x0F,
     ADDR_BATTERY_STATUS       = 0x12,
     ADDR_CELL_VOLTAGES        = 0x14,    // hasta 0x32
     ADDR_STACK_VOLTAGE        = 0x34,
