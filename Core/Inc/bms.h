@@ -77,6 +77,7 @@ typedef enum
     ADDR_LOAD_DET_ON          = 0x009E,
     ADDR_LOAD_DET_OFF         = 0x009F,
     ADDR_OTP_WR_CHECK         = 0x00A0,
+    ADDR_OTP_WRITE            = 0x00A1,
     ADDR_GPO_SUBCOMMANDS      = 0x2800,    // hasta 0x2818
     ADDR_PF_FORCE_A           = 0x2857,
     ADDR_PF_FORCE_B           = 0x29A3,

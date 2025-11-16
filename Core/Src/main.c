@@ -53,6 +53,14 @@ typedef enum
 #error "Must define BMS_MODEL_10S or BMS_MODEL_14S"
 #endif
 
+#define R  0    // Read; Used in DirectCommands and Subcommands functions
+#define W  1    // Write; Used in DirectCommands and Subcommands functions
+#define W2 2    // Write data with two bytes; Used in Subcommands function
+
+#define MIN_PACK_VOLTAGE_MV  (33000u)    // 3.3V per cell * 10 cells
+#define MAX_PACK_VOLTAGE_MV  (42000u)    // 4.2V
+#define DIFF_PACK_VOLTAGE_MV (MAX_PACK_VOLTAGE_MV - MIN_PACK_VOLTAGE_MV)
+
 
 #define SPI_READ_FRAME(addr)  (addr & 0x7F)
 #define SPI_WRITE_FRAME(addr) ((addr & 0x7F) | 0x80)
@@ -70,8 +78,8 @@ typedef enum
 
 #define CAN_ID_BMS (0x10)
 
-#define APPLICATION_ADDRESS (0x08004000u) //Defined in linker script FLASH ORIGIN
-#define FLASH_LENGTH        (0x0001C000u) //Defined in linker script FLASH LENGTH
+#define APPLICATION_ADDRESS (0x08004000u)    // Defined in linker script FLASH ORIGIN
+#define FLASH_LENGTH        (0x0001C000u)    // Defined in linker script FLASH LENGTH
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -505,6 +513,38 @@ void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
     }
 }
 
+uint16_t BQ769x2_ReadVoltage(uint8_t command)
+// This function can be used to read a specific cell voltage or stack / pack / LD voltage
+{
+    // RX_data is global var
+    DirectCommands(command, 0x00, R);
+#if 0
+	if(command >= Cell1Voltage && command <= Cell16Voltage) {//Cells 1 through 16 (0x14 to 0x32)
+		return (RX_data[1]*256 + RX_data[0]); //voltage is reported in mV
+	}
+	else {//stack, Pack, LD
+		return 10 * (RX_data[1]*256 + RX_data[0]); //voltage is reported in 0.01V units
+	}
+#endif
+    // voltage is reported in 0.01V (centivolts) units by default,
+    //(Settings:Configuration:DA Configuration USER_VOLTS_CV in TRM)
+    return 10 * (rxdata[1] * 256 + rxdata[0]);
+}
+
+int16_t BQ769x2_ReadCurrent()
+// Reads PACK current
+{
+    DirectCommands(0x3A, 0x00, R);
+    return (rxdata[1] * 256 + rxdata[0]);    // current is reported in mA
+}
+
+float BQ769x2_ReadTemperature(uint8_t command)
+{
+    DirectCommands(command, 0x00, R);
+    // RX_data is a global var
+    return (0.1 * (float)(rxdata[1] * 256 + rxdata[0])) - 273.15;    // converts from 0.1K to Celcius
+}
+
 
 /**
  * @brief Decodes and processes incoming CAN bus commands.
@@ -524,7 +564,8 @@ void can_decode_cmd(can_message_t *msg)
 {
     if (msg->header.RTR == CAN_RTR_DATA)
     {
-        can_command_t cmd; UNUSED(cmd);
+        can_command_t cmd;
+        UNUSED(cmd);
 
         switch (msg->header.StdId)
         {
@@ -544,6 +585,7 @@ void can_decode_cmd(can_message_t *msg)
 
             case CAN_ID_BMS_RESET:
                 can_msg_transmit(CAN_ID_BMS_RESET, NULL, 0, 100u);
+                osDelay(pdMS_TO_TICKS(10u));
                 HAL_NVIC_SystemReset();
                 break;
 
@@ -584,7 +626,7 @@ void can_decode_cmd(can_message_t *msg)
     }
 }
 
-volatile uint16_t version = 100;    //e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
+volatile uint16_t version = 100;    // e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
 
 void transmit_fw_version(void)
 {
@@ -595,7 +637,8 @@ void transmit_fw_version(void)
     buffer[1] = version & 0xFF;
 
     /* Get 32bit CRC Flash Memory value */
-    uint32_t crc_value = HAL_CRC_Calculate(&hcrc, (uint32_t *)APPLICATION_ADDRESS, FLASH_LENGTH  / 4);
+    uint32_t crc_value = HAL_CRC_Calculate(&hcrc, (uint32_t *)APPLICATION_ADDRESS, FLASH_LENGTH / 4);
+
     buffer[2] = (crc_value >> 24) & 0xFF;
     buffer[3] = (crc_value >> 16) & 0xFF;
     buffer[4] = (crc_value >> 8) & 0xFF;
@@ -665,12 +708,15 @@ int main(void)
     transmit_fw_version();
 
     Subcommands(ADDR_DEVICE_NUMBER, 0, 0);
-    //  CommandSubcommands(ADDR_DEVICE_NUMBER);
+
     DirectCommands(ADDR_BATTERY_STATUS, 0, 0);    // read
     DirectCommands(ADDR_ALARM_RAW_STATUS, 0, 0);
+
     CommandSubcommands(ADDR_RESET);    // Resets the BQ769x2 registers
     HAL_Delay(60);
-    //	bms_init();  // Configure all of the BQ769x2 register settings
+
+    bms_init();    // Configure all of the BQ769x2 register settings
+
     HAL_Delay(10);
     CommandSubcommands(ADDR_FET_ENABLE);    // Enable the CHG and DSG FETs
     HAL_Delay(10);
@@ -1179,14 +1225,6 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
     __NOP();
 }
 
-void HAL_CAN_RxFifo0FullCallback(CAN_HandleTypeDef *hcan)
-{
-    CAN_RxHeaderTypeDef RxHeader;
-    uint8_t             RxData[8] = {0};
-    HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData);
-    __NOP();
-}
-
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -1275,11 +1313,43 @@ void can_monitor(void *argument)
 void bms_main_task(void *argument)
 {
     /* USER CODE BEGIN bms_main_task */
+    uint8_t buffer[8];
+
     /* Infinite loop */
     for (;;)
     {
         /* Send Battery Status */
-        can_msg_transmit(CAN_ID_BATTERY_STATUS, (uint8_t *)&version, 1, 100u);
+        // SoC and SoH come from the Fuel Gauge IC. for now estimating SoC based on voltage,
+        // SoH is set to 100%
+        uint16_t voltage = BQ769x2_ReadVoltage(ADDR_STACK_VOLTAGE);
+        uint16_t current = (uint16_t)((BQ769x2_ReadCurrent() + 32768) / 1000);    // offset to make it unsigned
+        /* todo: review current var calculations to comply with documentation */
+        Temperature[0] = BQ769x2_ReadTemperature(0x70);    // TS1Temperature
+        Temperature[1] = BQ769x2_ReadTemperature(0x74);    // TS3Temperature
+        // TS2 not used, third temp sensor is on Fuel Gauge IC
+        float temp_avg_f = (Temperature[0] + Temperature[1]) / 2.0f;
+        if (temp_avg_f < -40.0f)
+        {
+            temp_avg_f = -40.0f;
+        }
+        if (temp_avg_f > 215.0f)
+        {
+            temp_avg_f = 215.0f;
+        }
+        uint8_t temp_avg = (uint8_t)(temp_avg_f + 40.0f);
+
+        uint8_t soc = (voltage - MIN_PACK_VOLTAGE_MV) * 100 / DIFF_PACK_VOLTAGE_MV;
+        uint8_t soh = 100u;
+
+        buffer[0] = soc;
+        buffer[1] = soh;
+        buffer[2] = (voltage >> 8) & 0xFF;
+        buffer[3] = voltage & 0xFF;
+        buffer[4] = (current >> 8) & 0xFF;
+        buffer[5] = current & 0xFF;
+        buffer[6] = temp_avg;
+
+        can_msg_transmit(CAN_ID_BATTERY_STATUS, (uint8_t *)&buffer, 8, 100u);
 
         /* Send BMS Safety & Alarm Flags */
         can_msg_transmit(CAN_ID_BMS_SAFETY, (uint8_t *)&version, 1, 100u);
