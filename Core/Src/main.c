@@ -548,7 +548,7 @@ uint16_t BQ769x2_ReadVoltage(uint8_t command)
     }
 }
 
-uint16_t BQ769x2_Readcell_voltages(void)
+void BQ769x2_Readcell_voltages(void)
 {
     int cellvoltageholder = ADDR_CELL_VOLTAGES;    // Cell1Voltage is 0x14
     for (int x = 0; x < 16; x++)
@@ -611,7 +611,7 @@ void BQ769x2_ReadSafetyStatus()
     UV_Fault = ((0x4 & rxdata[0]) >> 2);
     // SCD_Fault = ((0x8 & rxdata[1])>>3);
     // OCD_Fault = ((0x2 & rxdata[1])>>1);
-    if (rxdata[0] & 0xF0 != 0)    // check if any over-current bits are set
+    if ((rxdata[0] & 0xF0) != 0)    // check if any over-current bits are set
     {
         OC_Fault = 1;
     }
@@ -622,7 +622,7 @@ void BQ769x2_ReadSafetyStatus()
 
     DirectCommands(ADDR_SAFETY_STATUS_B, 0x00, R);
     value_SafetyStatusB = (rxdata[1] * 256 + rxdata[0]);
-    if (rxdata[0] & 0xF0 != 0)    // check if any over-temperature bits are set
+    if ((rxdata[0] & 0xF0) != 0)    // check if any over-temperature bits are set
     {
         OT_Fault = 1;
     }
@@ -1482,6 +1482,7 @@ void bms_main_task(void *argument)
         /* Send BMS Safety & Alarm Flags */
         BQ769x2_ReadSafetyStatus();
         BQ769x2_ReadPFStatus();
+        BQ769x2_Readcell_voltages();
         uint16_t min_voltage = get_smallest_cell_voltage();
         uint16_t max_voltage = get_largest_cell_voltage();
         float    max_temp    = Temperature[0] > Temperature[1] ? Temperature[0] : Temperature[1];
@@ -1524,7 +1525,25 @@ void bms_main_task(void *argument)
         can_msg_transmit(CAN_ID_BMS_SAFETY, (uint8_t *)&buffer, 8, 100u);
 
         /* Send BMS Operating Status */
-        can_msg_transmit(CAN_ID_BMS_OPERATION, (uint8_t *)&version, 1, 100u);
+        Subcommands(ADDR_CB_ACTIVE_CELLS, 0, R);
+        uint16_t balancing_status = (RX_32Byte[1] * 256 + RX_32Byte[0]);
+        if (balancing_status != 0xFFFF || balancing_status != 0x0000)
+        {
+            buffer[0] = 1;    // balancing active
+        }
+        else
+        {
+            buffer[0] = 0;    // balancing not active
+        }
+        uint16_t max_discharge_current = (uint16_t)(10.0f * 100.0f + 327.68f);    // set 10A max discharge current for now
+        uint16_t max_charge_current    = (uint16_t)(3.0f * 100.0f + 327.68f);     // set 3A max charge current for now
+
+        buffer[1] = (max_discharge_current >> 8) & 0xFF;
+        buffer[2] = max_discharge_current & 0xFF;
+        buffer[3] = (max_charge_current >> 8) & 0xFF;
+        buffer[4] = max_charge_current & 0xFF;
+
+        can_msg_transmit(CAN_ID_BMS_OPERATION, (uint8_t *)&buffer, 1, 100u);
 
         osDelay(pdMS_TO_TICKS(500));
     }
