@@ -682,8 +682,78 @@ void BQ769x2_ReadFETStatus()
     // Read FET Status to see which FETs are enabled
     DirectCommands(ADDR_FET_STATUS, 0x00, R);
     FET_Status = (rxdata[1] * 256 + rxdata[0]);
-    DSG        = ((0x4 & rxdata[0]) >> 2);    // discharge FET state
-    CHG        = (0x1 & rxdata[0]);           // charge FET state
+
+    DSG = ((0x4 & rxdata[0]) >> 2);    // discharge FET state
+    CHG = (0x1 & rxdata[0]);           // charge FET state
+}
+
+uint8_t get_bms_status(void)
+{
+    uint8_t rv = 0;
+
+    if (ProtectionsTriggered || PermanentFaultTriggered)
+    {
+        rv = 3u;    // BMS in Fault State
+    }
+    else
+    {
+        rv = 1u;    // BMS Operating Normally
+    }
+
+    return rv;
+}
+
+uint8_t get_balancing_status(void)
+{
+    uint8_t balancing_status = 0u;
+
+    Subcommands(ADDR_CB_ACTIVE_CELLS, 0, R);
+
+    uint16_t balancing_active_cells = (RX_32Byte[1] * 256 + RX_32Byte[0]);
+    if (balancing_active_cells != 0xFFFF || balancing_active_cells != 0x0000)
+    {
+        balancing_status = 1;
+    }
+    else
+    {
+        balancing_status = 0;
+    }
+
+    return balancing_status;
+}
+
+uint8_t get_charging_status(void)
+{
+    uint8_t charging_status = 0u;
+
+    /* With the FETs on, the only way to detect charger is with the current
+     * measurement. With FETs off you can compare the PACK voltage to top of
+     * stack (cmds 0x36 and 0x34).
+     **/
+
+    uint8_t fets_status = DSG | CHG;
+    if (fets_status == 0)
+    {
+        /* FETs off */
+        uint16_t stack_voltage = BQ769x2_ReadVoltage(ADDR_STACK_VOLTAGE);
+        uint16_t pack_voltage  = BQ769x2_ReadVoltage(ADDR_PACK_PIN_VOLTAGE);
+
+        if (stack_voltage < pack_voltage)
+        {
+            charging_status = 1;
+        }
+    }
+    else
+    {
+        /* FETs on */
+        int16_t current = BQ769x2_ReadCurrent();
+        if (current < 0)
+        {
+            charging_status = 1;
+        }
+    }
+
+    return charging_status;
 }
 
 
@@ -1463,11 +1533,17 @@ void bms_main_task(void *argument)
         // SoC and SoH come from the Fuel Gauge IC. for now estimating SoC based on voltage,
         // SoH is set to 100%
         uint16_t voltage = BQ769x2_ReadVoltage(ADDR_STACK_VOLTAGE);
-        uint16_t current = (uint16_t)((BQ769x2_ReadCurrent() + 32768) / 1000);    // offset to make it unsigned
-        /* todo: review current var calculations to comply with documentation */
+        if (voltage < MIN_PACK_VOLTAGE_MV)
+        {
+            voltage = MIN_PACK_VOLTAGE_MV;
+        }
+
+        int16_t current = BQ769x2_ReadCurrent() / 10;    // mA -> A -> CAN doc units: (val mA * (1 A / 1000 mA) * (100 units / 1 A)) = val / 10
+
         Temperature[0] = BQ769x2_ReadTemperature(0x70);    // TS1Temperature
         Temperature[1] = BQ769x2_ReadTemperature(0x74);    // TS3Temperature
         // TS2 not used, third temp sensor is on Fuel Gauge IC
+
         float temp_avg_f = (Temperature[0] + Temperature[1]) / 2.0f;
         if (temp_avg_f < -40.0f)
         {
@@ -1477,6 +1553,7 @@ void bms_main_task(void *argument)
         {
             temp_avg_f = 215.0f;
         }
+
         uint8_t temp_avg = (uint8_t)(temp_avg_f + 40.0f);
 
         uint8_t soc = (voltage - MIN_PACK_VOLTAGE_MV) * 100 / DIFF_PACK_VOLTAGE_MV;
@@ -1489,7 +1566,6 @@ void bms_main_task(void *argument)
         buffer[4] = (current >> 8) & 0xFF;
         buffer[5] = current & 0xFF;
         buffer[6] = temp_avg;
-
         can_msg_transmit(CAN_ID_BATTERY_STATUS, (uint8_t *)&buffer, 8, 100u);
 
         /* Send BMS Safety & Alarm Flags */
@@ -1534,43 +1610,24 @@ void bms_main_task(void *argument)
         buffer[4] = max_voltage & 0xFF;
         buffer[5] = (uint8_t)(max_temp + 40.0f);
         buffer[6] = fuse_ok;
-
         can_msg_transmit(CAN_ID_BMS_SAFETY, (uint8_t *)&buffer, 8, 100u);
 
         /* Send BMS Operating Status */
-        Subcommands(ADDR_CB_ACTIVE_CELLS, 0, R);
-        uint16_t balancing_status = (RX_32Byte[1] * 256 + RX_32Byte[0]);
-        if (balancing_status != 0xFFFF || balancing_status != 0x0000)
-        {
-            buffer[0] = 1;    // balancing active
-        }
-        else
-        {
-            buffer[0] = 0;    // balancing not active
-        }
-        uint16_t max_discharge_current = (uint16_t)(10.0f * 100.0f + 327.68f);    // set 10A max discharge current for now
-        uint16_t max_charge_current    = (uint16_t)(3.0f * 100.0f + 327.68f);     // set 3A max charge current for now
+        int16_t max_discharge_current = (int16_t)(10.0f * 100.0f);    // set 10A max discharge current for now
+        int16_t max_charge_current    = (int16_t)(3.0f * 100.0f);     // set 3A max charge current for now
 
+        buffer[0] = get_balancing_status();
         buffer[1] = (max_discharge_current >> 8) & 0xFF;
         buffer[2] = max_discharge_current & 0xFF;
         buffer[3] = (max_charge_current >> 8) & 0xFF;
         buffer[4] = max_charge_current & 0xFF;
 
-        buffer[5] = 0u;    // Charger status. TODO: implement charger status detection
-
-        if (ProtectionsTriggered || PermanentFaultTriggered)
-        {
-            buffer[6] = 3u;    // BMS in Fault State
-        }
-        else
-        {
-            buffer[6] = 1u;    // BMS Operating Normally
-        }
-
         BQ769x2_ReadFETStatus();
-        buffer[7] = (CHG << 1) | DSG;
 
-        can_msg_transmit(CAN_ID_BMS_OPERATION, (uint8_t *)&buffer, 1, 100u);
+        buffer[5] = get_charging_status();
+        buffer[6] = get_bms_status();
+        buffer[7] = (CHG << 1) | DSG;
+        can_msg_transmit(CAN_ID_BMS_OPERATION, (uint8_t *)&buffer, 8, 100u);
 
         osDelay(pdMS_TO_TICKS(500));
     }
