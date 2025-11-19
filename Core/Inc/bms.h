@@ -95,6 +95,11 @@ typedef enum
     ADDR_READ_CAL1            = 0xF081
 } bms_command_address_t;
 
+typedef enum
+{
+    REG12_CONFIG = 0x9236
+} data_memory_registers_t;
+
 /* Approximate time of completion in usec */
 typedef enum
 {
