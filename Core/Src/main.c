@@ -133,7 +133,7 @@ osThreadId_t         bms_taskHandle;
 const osThreadAttr_t bms_task_attributes = {
     .name       = "bms_task",
     .stack_size = 128 * 4,
-    .priority   = (osPriority_t)osPriorityLow,
+    .priority   = (osPriority_t)osPriorityNormal,
 };
 /* Definitions for CANQueue */
 osMessageQueueId_t         CANQueueHandle;
@@ -558,7 +558,7 @@ void Subcommands(uint16_t command, uint16_t data, uint8_t type)
 void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
 // See the TRM or the BQ76952 header file for a full list of Direct Commands
 {    // type: R = read, W = write
-    uint8_t TX_data[3] = {0x00};
+    uint8_t TX_data[2] = {0x00};
 
     // little endian format
     TX_data[0] = data & 0xff;
@@ -566,7 +566,7 @@ void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
 
     if (type == 0)
     {                                       // Read
-        SPI_ReadReg(command, rxdata, 3);    // RX_data is a global variable
+        SPI_ReadReg(command, rxdata, 2);    // RX_data is a global variable
         HAL_Delay(2);
     }
     if (type == 1)
@@ -962,7 +962,7 @@ void bms_otp_check(void)
 
         // SPI_WriteReg(0x3E, txreg, 2);
         // HAL_Delay(2);
-        // SPI_ReadReg(0x40, RX_32Byte, 32);    // RX_32Byte is a global variable
+        // SPI_ReadReg(0x40, RX_32Byte, 32);    // este debe ser el comando despues del primer otp_write
 
         if (RX_32Byte[0] != 0x80)
         {
@@ -970,6 +970,11 @@ void bms_otp_check(void)
             __NOP();
         }
         CommandSubcommands(ADDR_EXIT_CFGUPDATE);
+    }
+    else
+    {
+        // OTP already programmed
+        __NOP();
     }
 }
 
@@ -1014,7 +1019,7 @@ int main(void)
 
     HAL_CAN_Start(&hcan1);
 
-    can_msg_transmit(CAN_ID_BMS, (uint8_t *)opening_msg, strlen(opening_msg), HAL_MAX_DELAY);
+    can_msg_transmit(CAN_ID_BMS, (uint8_t *)opening_msg, strlen(opening_msg), 100u);
 
 #if 0
     if (version == 2)
@@ -1041,6 +1046,7 @@ int main(void)
     HAL_Delay(60);
 
     bms_otp_check();
+    BQ769x2_ReadSafetyStatus();
     bms_init();    // Configure all of the BQ769x2 register settings
 
     HAL_Delay(10);
@@ -1082,7 +1088,7 @@ int main(void)
 				} 
 			} // Turn off the LED if Safety Status has cleared which means the protection condition is no longer present
 		}
-		delayUS(20000);  // repeat loop every 20 ms
+		HAL_Delay(20);  // repeat loop every 20 ms
   }
 #endif
     /* USER CODE END 2 */
