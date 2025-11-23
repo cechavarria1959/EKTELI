@@ -133,7 +133,7 @@ osThreadId_t         bms_taskHandle;
 const osThreadAttr_t bms_task_attributes = {
     .name       = "bms_task",
     .stack_size = 128 * 4,
-    .priority   = (osPriority_t)osPriorityLow,
+    .priority   = (osPriority_t)osPriorityNormal,
 };
 /* Definitions for CANQueue */
 osMessageQueueId_t         CANQueueHandle;
@@ -380,6 +380,49 @@ void CommandSubcommands(uint16_t command)    // For Command only Subcommands
     HAL_Delay(2);
 }
 
+void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
+{
+    uint8_t TX_Buffer[2]  = {0x00, 0x00};
+    uint8_t TX_RegData[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+    // TX_RegData in little endian format
+    TX_RegData[0] = reg_addr & 0xff;
+    TX_RegData[1] = (reg_addr >> 8) & 0xff;
+    TX_RegData[2] = reg_data & 0xff;    // 1st byte of data
+
+    switch (datalen)
+    {
+        case 1:    // 1 byte datalength
+            SPI_WriteReg(0x3E, TX_RegData, 3);
+            HAL_Delay(2);
+            TX_Buffer[0] = Checksum(TX_RegData, 3);
+            TX_Buffer[1] = 0x05;                 // combined length of register address and data
+            SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
+            HAL_Delay(2);
+            break;
+        case 2:    // 2 byte datalength
+            TX_RegData[3] = (reg_data >> 8) & 0xff;
+            SPI_WriteReg(0x3E, TX_RegData, 4);
+            HAL_Delay(2);
+            TX_Buffer[0] = Checksum(TX_RegData, 4);
+            TX_Buffer[1] = 0x06;                 // combined length of register address and data
+            SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
+            HAL_Delay(2);
+            break;
+        case 4:    // 4 byte datalength, Only used for CCGain and Capacity Gain
+            TX_RegData[3] = (reg_data >> 8) & 0xff;
+            TX_RegData[4] = (reg_data >> 16) & 0xff;
+            TX_RegData[5] = (reg_data >> 24) & 0xff;
+            SPI_WriteReg(0x3E, TX_RegData, 6);
+            HAL_Delay(2);
+            TX_Buffer[0] = Checksum(TX_RegData, 6);
+            TX_Buffer[1] = 0x08;                 // combined length of register address and data
+            SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
+            HAL_Delay(2);
+            break;
+    }
+}
+
 void bms_init()
 {
     // Configures all parameters in device RAM
@@ -515,7 +558,7 @@ void Subcommands(uint16_t command, uint16_t data, uint8_t type)
 void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
 // See the TRM or the BQ76952 header file for a full list of Direct Commands
 {    // type: R = read, W = write
-    uint8_t TX_data[3] = {0x00};
+    uint8_t TX_data[2] = {0x00};
 
     // little endian format
     TX_data[0] = data & 0xff;
@@ -523,7 +566,7 @@ void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
 
     if (type == 0)
     {                                       // Read
-        SPI_ReadReg(command, rxdata, 3);    // RX_data is a global variable
+        SPI_ReadReg(command, rxdata, 2);    // RX_data is a global variable
         HAL_Delay(2);
     }
     if (type == 1)
@@ -859,6 +902,82 @@ void transmit_fw_version(void)
     can_msg_transmit(CAN_ID_BMS_FW_VER, buffer, 6, 100u);
 }
 
+/* mainly checks REG2 Status for MCU power rail, which is off for
+ * BQ7695203 device as default.
+ *
+ * In order for OTP to work a voltage between 10 to 12 V should be applied
+ * to the BAT pin and the device must be in FULLACCESS mode. More details
+ * can be found in BQ769x2 Calibration and OTP Programming Guide SLUAA32A.
+ */
+void bms_otp_check(void)
+{
+    // uint8_t reg12_register = 0x00;
+    // SPI_ReadReg(REG12_CONFIG, &reg12_register, 1); // muy probablemente tenga que usar subcommands(,,R) para leer este registro
+    // if ((reg12_register & 0x70) != 0x70)
+
+    Subcommands(REG12_CONFIG, 0, R);
+    if ((RX_32Byte[0] & 0x70) != 0x70)
+    {
+        DirectCommands(ADDR_BATTERY_STATUS, 0, R);
+        if ((rxdata[1] & 0x03) != 0x01)
+        {
+            /* Enter FULLACCESS mode sequence */
+        }
+
+        CommandSubcommands(ADDR_SET_CFGUPDATE);
+        BQ769x2_SetRegister(REG12_CONFIG, 0x7F, 1);    // REG2 @ 3.3V & REG1 @ 5V
+        CommandSubcommands(ADDR_EXIT_CFGUPDATE);
+
+        // SPI_ReadReg(REG12_CONFIG, &reg12_register, 1);
+        // if (reg12_register != 0x7F)
+        Subcommands(REG12_CONFIG, 0, R);
+        if (RX_32Byte[0] != 0x7F)
+        {
+            // Retry
+            __NOP();
+            return;
+        }
+
+        CommandSubcommands(ADDR_SET_CFGUPDATE);
+        DirectCommands(ADDR_BATTERY_STATUS, 0, R);
+        if ((rxdata[0] & 0x80) >> 7)
+        {
+            // Conditions for OTP programming NOT met
+            CommandSubcommands(ADDR_EXIT_CFGUPDATE);
+            return;
+        }
+        Subcommands(ADDR_OTP_WR_CHECK, 0x0000, R);
+        if (RX_32Byte[0] != 0x80)
+        {
+            // OTP programming NOT possible
+            CommandSubcommands(ADDR_EXIT_CFGUPDATE);
+            return;
+        }
+        Subcommands(ADDR_OTP_WRITE, 0x0000, W);
+        HAL_Delay(200);
+        Subcommands(ADDR_OTP_WRITE, 0x0000, R);    // or ADDR_OTP_WR_CHECK?
+        // uint8_t txreg[2];
+        // txreg[0] = ADDR_OTP_WRITE & 0xff;
+        // txreg[1] = (ADDR_OTP_WRITE >> 8) & 0xff;
+
+        // SPI_WriteReg(0x3E, txreg, 2);
+        // HAL_Delay(2);
+        // SPI_ReadReg(0x40, RX_32Byte, 32);    // este debe ser el comando despues del primer otp_write
+
+        if (RX_32Byte[0] != 0x80)
+        {
+            // OTP programming FAILED
+            __NOP();
+        }
+        CommandSubcommands(ADDR_EXIT_CFGUPDATE);
+    }
+    else
+    {
+        // OTP already programmed
+        __NOP();
+    }
+}
+
 char opening_msg[] = "\r\n\r\nEKTELI BMS, version 1.0\r\n";
 /* USER CODE END 0 */
 
@@ -900,7 +1019,7 @@ int main(void)
 
     HAL_CAN_Start(&hcan1);
 
-    can_msg_transmit(CAN_ID_BMS, (uint8_t *)opening_msg, strlen(opening_msg), HAL_MAX_DELAY);
+    can_msg_transmit(CAN_ID_BMS, (uint8_t *)opening_msg, strlen(opening_msg), 100u);
 
 #if 0
     if (version == 2)
@@ -926,6 +1045,8 @@ int main(void)
     CommandSubcommands(ADDR_RESET);    // Resets the BQ769x2 registers
     HAL_Delay(60);
 
+    bms_otp_check();
+    BQ769x2_ReadSafetyStatus();
     bms_init();    // Configure all of the BQ769x2 register settings
 
     HAL_Delay(10);
@@ -967,7 +1088,7 @@ int main(void)
 				} 
 			} // Turn off the LED if Safety Status has cleared which means the protection condition is no longer present
 		}
-		delayUS(20000);  // repeat loop every 20 ms
+		HAL_Delay(20);  // repeat loop every 20 ms
   }
 #endif
     /* USER CODE END 2 */
