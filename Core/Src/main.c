@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "bms.h"
+#include "can_messages.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -52,6 +53,14 @@ typedef enum
 #error "Must define BMS_MODEL_10S or BMS_MODEL_14S"
 #endif
 
+#define R  0    // Read; Used in DirectCommands and Subcommands functions
+#define W  1    // Write; Used in DirectCommands and Subcommands functions
+#define W2 2    // Write data with two bytes; Used in Subcommands function
+
+#define MIN_PACK_VOLTAGE_MV  (33000u)    // 3.3V per cell * 10 cells
+#define MAX_PACK_VOLTAGE_MV  (42000u)    // 4.2V
+#define DIFF_PACK_VOLTAGE_MV (MAX_PACK_VOLTAGE_MV - MIN_PACK_VOLTAGE_MV)
+
 
 #define SPI_READ_FRAME(addr)  (addr & 0x7F)
 #define SPI_WRITE_FRAME(addr) ((addr & 0x7F) | 0x80)
@@ -66,6 +75,11 @@ typedef enum
 
 #define FW_UPDATE_BYTE_SEQUENCE_1 (0x5555AAAA)
 #define FW_UPDATE_BYTE_SEQUENCE_2 (0xAAAA5555)
+
+#define CAN_ID_BMS (0x10)
+
+#define APPLICATION_ADDRESS (0x08004000u)    // Defined in linker script FLASH ORIGIN
+#define FLASH_LENGTH        (0x0001C000u)    // Defined in linker script FLASH LENGTH
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -75,6 +89,8 @@ typedef enum
 
 /* Private variables ---------------------------------------------------------*/
 CAN_HandleTypeDef hcan1;
+
+CRC_HandleTypeDef hcrc;
 
 DAC_HandleTypeDef hdac1;
 
@@ -112,6 +128,13 @@ const osThreadAttr_t CANMonitor_attributes = {
     .stack_size = 128 * 4,
     .priority   = (osPriority_t)osPriorityLow,
 };
+/* Definitions for bms_task */
+osThreadId_t         bms_taskHandle;
+const osThreadAttr_t bms_task_attributes = {
+    .name       = "bms_task",
+    .stack_size = 128 * 4,
+    .priority   = (osPriority_t)osPriorityLow,
+};
 /* Definitions for CANQueue */
 osMessageQueueId_t         CANQueueHandle;
 const osMessageQueueAttr_t CANQueue_attributes = {
@@ -125,12 +148,33 @@ osSemaphoreId_t         semaphore_1Handle;
 const osSemaphoreAttr_t semaphore_1_attributes = {
     .name = "semaphore_1"};
 /* USER CODE BEGIN PV */
-uint16_t AlarmBits            = 0x00;
-float    Temperature[3]       = {0, 0, 0};
-uint16_t Pack_Current         = 0x00;
-uint8_t  ProtectionsTriggered = 0;    // Set to 1 if any protection triggers
-uint8_t  rxdata[4];
-uint8_t  RX_32Byte[32] = {0x00};
+uint16_t AlarmBits       = 0x00;
+float    Temperature[3]  = {0.0f};
+uint16_t Pack_Current    = 0x00;
+uint16_t CellVoltage[16] = {0};
+
+uint8_t rxdata[4];
+uint8_t RX_32Byte[32] = {0x00};
+
+uint8_t value_SafetyStatusA;    // Safety Status Register A
+uint8_t value_SafetyStatusB;    // Safety Status Register B
+uint8_t value_SafetyStatusC;    // Safety Status Register C
+uint8_t value_PFStatusA;        // Permanent Fail Status Register A
+uint8_t value_PFStatusB;        // Permanent Fail Status Register B
+uint8_t value_PFStatusC;        // Permanent Fail Status Register C
+uint8_t FET_Status;             // FET Status register contents  - Shows states of FETs
+
+uint8_t UV_Fault = 0;    // under-voltage fault state
+uint8_t OV_Fault = 0;    // over-voltage fault state
+uint8_t OT_Fault = 0;    // over-temperature fault state
+uint8_t OC_Fault = 0;    // over-current fault state
+uint8_t PF_Fault = 0;    // permanent-fault state
+
+uint8_t ProtectionsTriggered    = 0;    // Set to 1 if any protection triggers
+uint8_t PermanentFaultTriggered = 0;    // Set to 1 if any permanent fault triggers
+
+uint8_t DSG = 0;    // discharge FET state
+uint8_t CHG = 0;    // charge FET state
 
 can_message_t rx_msg;
 
@@ -144,18 +188,20 @@ static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_RTC_Init(void);
+static void MX_CRC_Init(void);
 void        StartDefaultTask(void *argument);
 void        bms_monitor(void *argument);
 void        fuel_gauge_monitor(void *argument);
 void        can_monitor(void *argument);
+void        bms_main_task(void *argument);
 
 /* USER CODE BEGIN PFP */
-
+void transmit_fw_version(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t timeout)
+HAL_StatusTypeDef can_msg_transmit(uint32_t can_id, uint8_t *pdata, uint32_t length, uint32_t timeout)
 {
     CAN_TxHeaderTypeDef tx_header;
     uint8_t             tx_data[8];
@@ -189,7 +235,7 @@ HAL_StatusTypeDef can_msg_transmit(uint8_t *pdata, uint32_t length, uint32_t tim
 
         tx_count -= bytes_to_copy;
 
-        tx_header.StdId = 0x123;
+        tx_header.StdId = can_id;
         tx_header.IDE   = CAN_ID_STD;
         tx_header.RTR   = CAN_RTR_DATA;
         tx_header.DLC   = bytes_to_copy;
@@ -488,56 +534,330 @@ void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
     }
 }
 
-
-/**
- * @brief Decodes and processes CAN bus commands received in rx_msg.
- *
- * This function reads the command from the first byte of the CAN message data,
- * and executes the corresponding action based on the command type.
- * Supported commands include:
- *   - GET_VOLTAGE: Retrieve battery voltage (implementation pending).
- *   - GET_CURRENT: Retrieve battery current (implementation pending).
- *   - GET_SOH: Retrieve State of Health (implementation pending).
- *   - GET_SOC: Retrieve State of Charge (implementation pending).
- *   - FW_UPDATE: Initiate firmware update sequence by writing specific values
- *     to RTC backup registers and triggering a system reset, app starts in
- *     bootloader mode.
- */
-void can_decode_cmd(void)
+uint16_t BQ769x2_ReadVoltage(uint8_t command)
+// This function can be used to read a specific cell voltage or stack / pack / LD voltage
 {
-    can_command_t cmd = rx_msg.data[0];
+    // RX_data is global var
+    DirectCommands(command, 0x00, R);
 
-    switch (cmd)
+    if (command >= ADDR_CELL_VOLTAGES && command <= (ADDR_CELL_VOLTAGES + (15 * 2)))    // Cells 1 through 16 (0x14 to 0x32)
     {
-        case GET_VOLTAGE:
-            /* todo */
-            break;
-
-        case GET_CURRENT:
-            /* todo */
-            break;
-
-        case GET_SOH:
-            /* todo */
-            break;
-
-        case GET_SOC:
-            /* todo */
-            break;
-
-        case FW_UPDATE:
-            HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, FW_UPDATE_BYTE_SEQUENCE_1);
-            HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, FW_UPDATE_BYTE_SEQUENCE_2);
-            HAL_Delay(1);
-            HAL_NVIC_SystemReset();
-            break;
-
-        default:
-            break;
+        return (rxdata[1] * 256 + rxdata[0]);    // voltage is reported in mV
+    }
+    else
+    {
+        // voltage is reported in 0.01V (centivolts) units by default,
+        //(Settings:Configuration:DA Configuration USER_VOLTS_CV in TRM)
+        return 10 * (rxdata[1] * 256 + rxdata[0]);
     }
 }
 
-volatile uint8_t version = 1;
+void BQ769x2_Readcell_voltages(void)
+{
+    int cellvoltageholder = ADDR_CELL_VOLTAGES;    // Cell1Voltage is 0x14
+    for (int x = 0; x < 16; x++)
+    {    // Reads all cell voltages
+        CellVoltage[x] = BQ769x2_ReadVoltage(cellvoltageholder);
+        cellvoltageholder += 2;
+    }
+}
+
+uint16_t get_smallest_cell_voltage()
+{
+    uint16_t smallest_voltage = 0xFFFF;
+    for (int i = 0; i < 16; i++)
+    {
+        if (CellVoltage[i] < smallest_voltage)
+        {
+            smallest_voltage = CellVoltage[i];
+        }
+    }
+
+    return smallest_voltage;
+}
+
+uint16_t get_largest_cell_voltage()
+{
+    uint16_t largest_voltage = 0x0000;
+    for (int i = 0; i < 16; i++)
+    {
+        if (CellVoltage[i] > largest_voltage)
+        {
+            largest_voltage = CellVoltage[i];
+        }
+    }
+
+    return largest_voltage;
+}
+
+int16_t BQ769x2_ReadCurrent()
+// Reads PACK current
+{
+    DirectCommands(0x3A, 0x00, R);
+    return (rxdata[1] * 256 + rxdata[0]);    // current is reported in mA
+}
+
+float BQ769x2_ReadTemperature(uint8_t command)
+{
+    DirectCommands(command, 0x00, R);
+    // RX_data is a global var
+    return (0.1 * (float)(rxdata[1] * 256 + rxdata[0])) - 273.15;    // converts from 0.1K to Celcius
+}
+
+void BQ769x2_ReadSafetyStatus()
+{    // good example functions
+    // Read Safety Status A/B/C and find which bits are set
+    // This shows which primary protections have been triggered
+    DirectCommands(ADDR_SAFETY_STATUS_A, 0x00, R);
+    value_SafetyStatusA = (rxdata[1] * 256 + rxdata[0]);
+    // Example Fault Flags
+    OV_Fault = ((0x8 & rxdata[0]) >> 3);
+    UV_Fault = ((0x4 & rxdata[0]) >> 2);
+    // SCD_Fault = ((0x8 & rxdata[1])>>3);
+    // OCD_Fault = ((0x2 & rxdata[1])>>1);
+    if ((rxdata[0] & 0xF0) != 0)    // check if any over-current bits are set
+    {
+        OC_Fault = 1;
+    }
+    else
+    {
+        OC_Fault = 0;
+    }
+
+    DirectCommands(ADDR_SAFETY_STATUS_B, 0x00, R);
+    value_SafetyStatusB = (rxdata[1] * 256 + rxdata[0]);
+    if ((rxdata[0] & 0xF0) != 0)    // check if any over-temperature bits are set
+    {
+        OT_Fault = 1;
+    }
+    else
+    {
+        OT_Fault = 0;
+    }
+
+    /* Safety Status C needed? */
+    // DirectCommands(ADDR_SAFETY_STATUS_C, 0x00, R);
+    // value_SafetyStatusC = (rxdata[1] * 256 + rxdata[0]);
+
+    if ((value_SafetyStatusA + value_SafetyStatusB + value_SafetyStatusC) > 0)
+    {
+        ProtectionsTriggered = 1;
+    }
+    else
+    {
+        ProtectionsTriggered = 0;
+    }
+}
+
+void BQ769x2_ReadPFStatus()
+{
+    // Read Permanent Fail Status A/B/C and find which bits are set
+    // This shows which permanent failures have been triggered
+    DirectCommands(ADDR_PF_STATUS_A, 0x00, R);
+    value_PFStatusA = (rxdata[1] * 256 + rxdata[0]);
+    DirectCommands(ADDR_PF_STATUS_B, 0x00, R);
+    value_PFStatusB = (rxdata[1] * 256 + rxdata[0]);
+    DirectCommands(ADDR_PF_STATUS_C, 0x00, R);
+    value_PFStatusC = (rxdata[1] * 256 + rxdata[0]);
+
+    if ((value_PFStatusA + value_PFStatusB + value_PFStatusC) > 0)
+    {
+        PermanentFaultTriggered = 1;
+    }
+    else
+    {
+        PermanentFaultTriggered = 0;
+    }
+}
+
+uint16_t BQ769x2_ReadAlarmStatus()
+{
+    // Read this register to find out why the ALERT pin was asserted
+    DirectCommands(ADDR_ALARM_STATUS, 0x00, R);
+    return (rxdata[1] * 256 + rxdata[0]);
+}
+
+void BQ769x2_ReadFETStatus()
+{
+    // Read FET Status to see which FETs are enabled
+    DirectCommands(ADDR_FET_STATUS, 0x00, R);
+    FET_Status = (rxdata[1] * 256 + rxdata[0]);
+
+    DSG = ((0x4 & rxdata[0]) >> 2);    // discharge FET state
+    CHG = (0x1 & rxdata[0]);           // charge FET state
+}
+
+uint8_t get_bms_status(void)
+{
+    uint8_t rv = 0;
+
+    if (ProtectionsTriggered || PermanentFaultTriggered)
+    {
+        rv = 3u;    // BMS in Fault State
+    }
+    else
+    {
+        rv = 1u;    // BMS Operating Normally
+    }
+
+    return rv;
+}
+
+uint8_t get_balancing_status(void)
+{
+    uint8_t balancing_status = 0u;
+
+    Subcommands(ADDR_CB_ACTIVE_CELLS, 0, R);
+
+    uint16_t balancing_active_cells = (RX_32Byte[1] * 256 + RX_32Byte[0]);
+    if (balancing_active_cells != 0xFFFF || balancing_active_cells != 0x0000)
+    {
+        balancing_status = 1;
+    }
+    else
+    {
+        balancing_status = 0;
+    }
+
+    return balancing_status;
+}
+
+uint8_t get_charging_status(void)
+{
+    uint8_t charging_status = 0u;
+
+    /* With the FETs on, the only way to detect charger is with the current
+     * measurement. With FETs off you can compare the PACK voltage to top of
+     * stack (cmds 0x36 and 0x34).
+     **/
+
+    uint8_t fets_status = DSG | CHG;
+    if (fets_status == 0)
+    {
+        /* FETs off */
+        uint16_t stack_voltage = BQ769x2_ReadVoltage(ADDR_STACK_VOLTAGE);
+        uint16_t pack_voltage  = BQ769x2_ReadVoltage(ADDR_PACK_PIN_VOLTAGE);
+
+        if (stack_voltage < pack_voltage)
+        {
+            charging_status = 1;
+        }
+    }
+    else
+    {
+        /* FETs on */
+        int16_t current = BQ769x2_ReadCurrent();
+        if (current < 0)
+        {
+            charging_status = 1;
+        }
+    }
+
+    return charging_status;
+}
+
+
+/**
+ * @brief Decodes and processes incoming CAN bus commands.
+ *
+ * This function handles CAN messages received by the BMS. It distinguishes between
+ * data frames and remote transmission request (RTR) frames, and processes each
+ * message according to its standard identifier (StdId).
+ *
+ * For RTR frames:
+ *   - CAN_ID_BMS_GET_PROTECTIONS: Responds with current protection settings.
+ *   - CAN_ID_BMS_GET_FAULTS: Responds with current fault status.
+ *   - CAN_ID_BMS_GET_FW_VER: Responds with the current firmware version.
+ *
+ * @param msg Pointer to the received CAN message structure.
+ */
+void can_decode_cmd(can_message_t *msg)
+{
+    if (msg->header.RTR == CAN_RTR_DATA)
+    {
+        can_command_t cmd;
+        UNUSED(cmd);
+
+        switch (msg->header.StdId)
+        {
+            case CAN_ID_BMS_STATE:
+                cmd = (can_command_t)msg->data[0];
+                can_msg_transmit(CAN_ID_BMS_STATE, NULL, 0, 100u);
+                break;
+
+            case CAN_ID_BMS_BALANCE:
+                cmd = (can_command_t)msg->data[0];
+                can_msg_transmit(CAN_ID_BMS_BALANCE, NULL, 0, 100u);
+                break;
+
+            case CAN_ID_BMS_SET_PROTECTIONS:
+                can_msg_transmit(CAN_ID_BMS_SET_PROTECTIONS, NULL, 0, 100u);
+                break;
+
+            case CAN_ID_BMS_RESET:
+                can_msg_transmit(CAN_ID_BMS_RESET, NULL, 0, 100u);
+                osDelay(pdMS_TO_TICKS(10u));
+                HAL_NVIC_SystemReset();
+                break;
+
+            case CAN_ID_FW_UPDATE:
+                if (msg->data[0] == CAN_ID_BMS)
+                {
+                    can_msg_transmit(CAN_ID_FW_UPDATE, NULL, 0, 100u);
+                    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, FW_UPDATE_BYTE_SEQUENCE_1);
+                    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, FW_UPDATE_BYTE_SEQUENCE_2);
+                    HAL_Delay(1);
+                    HAL_NVIC_SystemReset();
+                }
+                break;
+
+            default:
+                break;
+        }
+    }
+    else    // RTR Request frame
+    {
+        switch (msg->header.StdId)
+        {
+            case CAN_ID_BMS_GET_PROTECTIONS:
+                can_msg_transmit(CAN_ID_BMS_PROTECTIONS, NULL, 0, 100u);
+                break;
+
+            case CAN_ID_BMS_GET_FAULTS:
+                can_msg_transmit(CAN_ID_BMS_FAULTS, NULL, 0, 100u);
+                break;
+
+            case CAN_ID_BMS_GET_FW_VER:
+                transmit_fw_version();
+                break;
+
+            default:
+                break;
+        }
+    }
+}
+
+volatile uint16_t version = 100;    // e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
+
+void transmit_fw_version(void)
+{
+    uint8_t buffer[6];
+
+    /* Get Firmware Version */
+    buffer[0] = (version >> 8) & 0xFF;
+    buffer[1] = version & 0xFF;
+
+    /* Get 32bit CRC Flash Memory value */
+    uint32_t crc_value = HAL_CRC_Calculate(&hcrc, (uint32_t *)APPLICATION_ADDRESS, FLASH_LENGTH / 4);
+
+    buffer[2] = (crc_value >> 24) & 0xFF;
+    buffer[3] = (crc_value >> 16) & 0xFF;
+    buffer[4] = (crc_value >> 8) & 0xFF;
+    buffer[5] = crc_value & 0xFF;
+
+    /* Transmit on CAN */
+    can_msg_transmit(CAN_ID_BMS_FW_VER, buffer, 6, 100u);
+}
 
 char opening_msg[] = "\r\n\r\nEKTELI BMS, version 1.0\r\n";
 /* USER CODE END 0 */
@@ -575,12 +895,14 @@ int main(void)
     MX_SPI1_Init();
     MX_DAC1_Init();
     MX_RTC_Init();
+    MX_CRC_Init();
     /* USER CODE BEGIN 2 */
 
     HAL_CAN_Start(&hcan1);
 
-    can_msg_transmit((uint8_t *)opening_msg, strlen(opening_msg), HAL_MAX_DELAY);
+    can_msg_transmit(CAN_ID_BMS, (uint8_t *)opening_msg, strlen(opening_msg), HAL_MAX_DELAY);
 
+#if 0
     if (version == 2)
     {
         HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0);
@@ -592,16 +914,20 @@ int main(void)
         can_decode_cmd();
         HAL_Delay(10);
     }
+#endif
 
-    rx_msg.data[0] = version;
+    transmit_fw_version();
 
     Subcommands(ADDR_DEVICE_NUMBER, 0, 0);
-    //  CommandSubcommands(ADDR_DEVICE_NUMBER);
+
     DirectCommands(ADDR_BATTERY_STATUS, 0, 0);    // read
     DirectCommands(ADDR_ALARM_RAW_STATUS, 0, 0);
+
     CommandSubcommands(ADDR_RESET);    // Resets the BQ769x2 registers
     HAL_Delay(60);
-    //	bms_init();  // Configure all of the BQ769x2 register settings
+
+    bms_init();    // Configure all of the BQ769x2 register settings
+
     HAL_Delay(10);
     CommandSubcommands(ADDR_FET_ENABLE);    // Enable the CHG and DSG FETs
     HAL_Delay(10);
@@ -688,6 +1014,9 @@ int main(void)
 
     /* creation of CANMonitor */
     CANMonitorHandle = osThreadNew(can_monitor, NULL, &CANMonitor_attributes);
+
+    /* creation of bms_task */
+    bms_taskHandle = osThreadNew(bms_main_task, NULL, &bms_task_attributes);
 
     /* USER CODE BEGIN RTOS_THREADS */
     /* add threads, ... */
@@ -816,6 +1145,35 @@ static void MX_CAN1_Init(void)
     HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 
     /* USER CODE END CAN1_Init 2 */
+}
+
+/**
+ * @brief CRC Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_CRC_Init(void)
+{
+    /* USER CODE BEGIN CRC_Init 0 */
+
+    /* USER CODE END CRC_Init 0 */
+
+    /* USER CODE BEGIN CRC_Init 1 */
+
+    /* USER CODE END CRC_Init 1 */
+    hcrc.Instance                     = CRC;
+    hcrc.Init.DefaultPolynomialUse    = DEFAULT_POLYNOMIAL_ENABLE;
+    hcrc.Init.DefaultInitValueUse     = DEFAULT_INIT_VALUE_ENABLE;
+    hcrc.Init.InputDataInversionMode  = CRC_INPUTDATA_INVERSION_NONE;
+    hcrc.Init.OutputDataInversionMode = CRC_OUTPUTDATA_INVERSION_DISABLE;
+    hcrc.InputDataFormat              = CRC_INPUTDATA_FORMAT_WORDS;
+    if (HAL_CRC_Init(&hcrc) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    /* USER CODE BEGIN CRC_Init 2 */
+
+    /* USER CODE END CRC_Init 2 */
 }
 
 /**
@@ -1065,19 +1423,16 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
-    // can_message_t msg;
-    // HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &msg.header, msg.data);
-    HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &rx_msg.header, rx_msg.data);
+    can_message_t msg;
 
-    // osMessageQueuePut(CANQueueHandle, &msg, 0, 0);
-    __NOP();
-}
+    uint8_t msgcount = HAL_CAN_GetRxFifoFillLevel(hcan, CAN_RX_FIFO0);
 
-void HAL_CAN_RxFifo0FullCallback(CAN_HandleTypeDef *hcan)
-{
-    CAN_RxHeaderTypeDef RxHeader;
-    uint8_t             RxData[8] = {0};
-    HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData);
+    while (msgcount-- > 0)
+    {
+        HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &msg.header, msg.data);
+        osMessageQueuePut(CANQueueHandle, &msg, 0, 0);
+    }
+
     __NOP();
 }
 
@@ -1152,12 +1507,131 @@ void can_monitor(void *argument)
     {
         if (osMessageQueueGet(CANQueueHandle, &msg, NULL, osWaitForever) == osOK)
         {
-            // Procesa el mensaje aquí
-            // Ejemplo: analizar msg.header.StdId, msg.data, etc.
+            can_decode_cmd(&msg);
         }
-        osDelay(1);
+        osDelay(pdMS_TO_TICKS(10));
     }
     /* USER CODE END can_monitor */
+}
+
+/* USER CODE BEGIN Header_bms_main_task */
+/**
+ * @brief Function implementing the bms_task thread.
+ * @param argument: Not used
+ * @retval None
+ */
+/* USER CODE END Header_bms_main_task */
+void bms_main_task(void *argument)
+{
+    /* USER CODE BEGIN bms_main_task */
+    uint8_t buffer[8];
+
+    /* Infinite loop */
+    for (;;)
+    {
+        /* Send Battery Status */
+        // SoC and SoH come from the Fuel Gauge IC. for now estimating SoC based on voltage,
+        // SoH is set to 100%
+        uint16_t voltage = BQ769x2_ReadVoltage(ADDR_STACK_VOLTAGE);
+        if (voltage < MIN_PACK_VOLTAGE_MV)
+        {
+            voltage = MIN_PACK_VOLTAGE_MV;
+        }
+
+        int16_t current = BQ769x2_ReadCurrent() / 10;    // mA -> A -> CAN doc units: (val mA * (1 A / 1000 mA) * (100 units / 1 A)) = val / 10
+
+        Temperature[0] = BQ769x2_ReadTemperature(0x70);    // TS1Temperature
+        Temperature[1] = BQ769x2_ReadTemperature(0x74);    // TS3Temperature
+        // TS2 not used, third temp sensor is on Fuel Gauge IC
+
+        float temp_avg_f = (Temperature[0] + Temperature[1]) / 2.0f;
+        if (temp_avg_f < -40.0f)
+        {
+            temp_avg_f = -40.0f;
+        }
+        if (temp_avg_f > 215.0f)
+        {
+            temp_avg_f = 215.0f;
+        }
+
+        uint8_t temp_avg = (uint8_t)(temp_avg_f + 40.0f);
+
+        uint8_t soc = (voltage - MIN_PACK_VOLTAGE_MV) * 100 / DIFF_PACK_VOLTAGE_MV;
+        uint8_t soh = 100u;
+
+        buffer[0] = soc;
+        buffer[1] = soh;
+        buffer[2] = (voltage >> 8) & 0xFF;
+        buffer[3] = voltage & 0xFF;
+        buffer[4] = (current >> 8) & 0xFF;
+        buffer[5] = current & 0xFF;
+        buffer[6] = temp_avg;
+        can_msg_transmit(CAN_ID_BATTERY_STATUS, (uint8_t *)&buffer, 8, 100u);
+
+        /* Send BMS Safety & Alarm Flags */
+        BQ769x2_ReadSafetyStatus();
+        BQ769x2_ReadPFStatus();
+        BQ769x2_Readcell_voltages();
+        uint16_t min_voltage = get_smallest_cell_voltage();
+        uint16_t max_voltage = get_largest_cell_voltage();
+        float    max_temp    = Temperature[0] > Temperature[1] ? Temperature[0] : Temperature[1];
+        if (max_temp < -40.0f)
+        {
+            max_temp = -40.0f;
+        }
+        if (max_temp > 215.0f)
+        {
+            max_temp = 215.0f;
+        }
+
+        AlarmBits = BQ769x2_ReadAlarmStatus();
+        uint8_t fuse_ok;
+        if (AlarmBits & 0x0008)
+        {
+            fuse_ok = 0;    // blown
+        }
+        else
+        {
+            fuse_ok = 1;    // ok
+        }
+
+        if (!ProtectionsTriggered && !PermanentFaultTriggered)
+        {
+            buffer[0] = 0;
+        }
+        else
+        {
+            buffer[0] = (PF_Fault << 4) | (OC_Fault << 3) | (OT_Fault << 2) | (UV_Fault << 1) | OV_Fault;
+        }
+
+        buffer[1] = (min_voltage >> 8) & 0xFF;
+        buffer[2] = min_voltage & 0xFF;
+        buffer[3] = (max_voltage >> 8) & 0xFF;
+        buffer[4] = max_voltage & 0xFF;
+        buffer[5] = (uint8_t)(max_temp + 40.0f);
+        buffer[6] = fuse_ok;
+        can_msg_transmit(CAN_ID_BMS_SAFETY, (uint8_t *)&buffer, 8, 100u);
+
+        /* Send BMS Operating Status */
+        int16_t max_discharge_current = (int16_t)(10.0f * 100.0f);    // set 10A max discharge current for now
+        int16_t max_charge_current    = (int16_t)(3.0f * 100.0f);     // set 3A max charge current for now
+
+        buffer[0] = get_balancing_status();
+        buffer[1] = (max_discharge_current >> 8) & 0xFF;
+        buffer[2] = max_discharge_current & 0xFF;
+        buffer[3] = (max_charge_current >> 8) & 0xFF;
+        buffer[4] = max_charge_current & 0xFF;
+
+        BQ769x2_ReadFETStatus();
+
+        buffer[5] = get_charging_status();
+        buffer[6] = get_bms_status();
+        buffer[7] = (CHG << 1) | DSG;
+        can_msg_transmit(CAN_ID_BMS_OPERATION, (uint8_t *)&buffer, 8, 100u);
+
+        osDelay(pdMS_TO_TICKS(500));
+    }
+    /* USER CODE END bms_main_task */
 }
 
 /**

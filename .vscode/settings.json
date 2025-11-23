@@ -4,6 +4,8 @@
         "main.h": "c",
         "bms.h": "c",
         "ymodem.h": "c",
-        "flash_if.h": "c"
+        "flash_if.h": "c",
+        "freertos.h": "c",
+        "portable.h": "c"
     }    
 }

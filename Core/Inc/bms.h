@@ -12,7 +12,13 @@ typedef enum
 {
     ADDR_CONTROL_STATUS       = 0x00,
     ADDR_SAFETY_ALERT_STATUS  = 0x02,    // hasta 0x07
+    ADDR_SAFETY_STATUS_A      = 0x03,
+    ADDR_SAFETY_STATUS_B      = 0x05,
+    ADDR_SAFETY_STATUS_C      = 0x07,
     ADDR_PF_ALERT_STATUS      = 0x0A,    // hasta 0x11
+    ADDR_PF_STATUS_A          = 0x0B,
+    ADDR_PF_STATUS_B          = 0x0D,
+    ADDR_PF_STATUS_C          = 0x0F,
     ADDR_BATTERY_STATUS       = 0x12,
     ADDR_CELL_VOLTAGES        = 0x14,    // hasta 0x32
     ADDR_STACK_VOLTAGE        = 0x34,
@@ -24,6 +30,7 @@ typedef enum
     ADDR_ALARM_ENABLE         = 0x66,
     ADDR_INTERNAL_TEMP        = 0x68,
     ADDR_THERMISTOR_TEMP      = 0x6A,    // hasta 0x7A
+    ADDR_FET_STATUS           = 0x7F,
     ADDR_DEVICE_NUMBER        = 0x0001,
     ADDR_FW_VERSION           = 0x0002,
     ADDR_HW_VERSION           = 0x0003,
@@ -77,6 +84,7 @@ typedef enum
     ADDR_LOAD_DET_ON          = 0x009E,
     ADDR_LOAD_DET_OFF         = 0x009F,
     ADDR_OTP_WR_CHECK         = 0x00A0,
+    ADDR_OTP_WRITE            = 0x00A1,
     ADDR_GPO_SUBCOMMANDS      = 0x2800,    // hasta 0x2818
     ADDR_PF_FORCE_A           = 0x2857,
     ADDR_PF_FORCE_B           = 0x29A3,
