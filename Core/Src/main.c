@@ -62,6 +62,7 @@ typedef enum
 #define DIFF_PACK_VOLTAGE_MV (MAX_PACK_VOLTAGE_MV - MIN_PACK_VOLTAGE_MV)
 
 
+#define SPI_BMS_REG12_CONFIG  (0xDF)
 #define SPI_READ_FRAME(addr)  (addr & 0x7F)
 #define SPI_WRITE_FRAME(addr) ((addr & 0x7F) | 0x80)
 #define SPI_DUMMY_BYTE        (0x00)
@@ -911,27 +912,22 @@ void transmit_fw_version(void)
  */
 void bms_otp_check(void)
 {
-    // uint8_t reg12_register = 0x00;
-    // SPI_ReadReg(REG12_CONFIG, &reg12_register, 1); // muy probablemente tenga que usar subcommands(,,R) para leer este registro
-    // if ((reg12_register & 0x70) != 0x70)
-
     Subcommands(REG12_CONFIG, 0, R);
-    if ((RX_32Byte[0] & 0x70) != 0x70)
+    if (RX_32Byte[0] != SPI_BMS_REG12_CONFIG)
     {
         DirectCommands(ADDR_BATTERY_STATUS, 0, R);
         if ((rxdata[1] & 0x03) != 0x01)
         {
             /* Enter FULLACCESS mode sequence */
+            /* By default device is in FULLACCESS */
         }
 
         CommandSubcommands(ADDR_SET_CFGUPDATE);
-        BQ769x2_SetRegister(REG12_CONFIG, 0x7F, 1);    // REG2 @ 3.3V & REG1 @ 5V
+        BQ769x2_SetRegister(REG12_CONFIG, SPI_BMS_REG12_CONFIG, 1);    // REG2 @ 3.3V & REG1 @ 5V
         CommandSubcommands(ADDR_EXIT_CFGUPDATE);
 
-        // SPI_ReadReg(REG12_CONFIG, &reg12_register, 1);
-        // if (reg12_register != 0x7F)
         Subcommands(REG12_CONFIG, 0, R);
-        if (RX_32Byte[0] != 0x7F)
+        if (RX_32Byte[0] != SPI_BMS_REG12_CONFIG)
         {
             // Retry
             __NOP();
@@ -946,23 +942,27 @@ void bms_otp_check(void)
             CommandSubcommands(ADDR_EXIT_CFGUPDATE);
             return;
         }
+        
         Subcommands(ADDR_OTP_WR_CHECK, 0x0000, R);
+
+        uint8_t txreg[2];
+        txreg[0] = ADDR_OTP_WR_CHECK & 0xff;
+        txreg[1] = (ADDR_OTP_WR_CHECK >> 8) & 0xff;
+        SPI_WriteReg(0x3E, txreg, 2);
+        HAL_Delay(100);
+        SPI_ReadReg(0x40, RX_32Byte, 32);
         if (RX_32Byte[0] != 0x80)
         {
             // OTP programming NOT possible
             CommandSubcommands(ADDR_EXIT_CFGUPDATE);
             return;
         }
-        Subcommands(ADDR_OTP_WRITE, 0x0000, W);
-        HAL_Delay(200);
-        Subcommands(ADDR_OTP_WRITE, 0x0000, R);    // or ADDR_OTP_WR_CHECK?
-        // uint8_t txreg[2];
-        // txreg[0] = ADDR_OTP_WRITE & 0xff;
-        // txreg[1] = (ADDR_OTP_WRITE >> 8) & 0xff;
 
-        // SPI_WriteReg(0x3E, txreg, 2);
-        // HAL_Delay(2);
-        // SPI_ReadReg(0x40, RX_32Byte, 32);    // este debe ser el comando despues del primer otp_write
+        txreg[0] = ADDR_OTP_WRITE & 0xff;
+        txreg[1] = (ADDR_OTP_WRITE >> 8) & 0xff;
+        SPI_WriteReg(0x3E, txreg, 2);
+        HAL_Delay(200);
+        SPI_ReadReg(0x40, RX_32Byte, 32);
 
         if (RX_32Byte[0] != 0x80)
         {
@@ -1038,15 +1038,12 @@ int main(void)
     transmit_fw_version();
 
     Subcommands(ADDR_DEVICE_NUMBER, 0, 0);
-
     DirectCommands(ADDR_BATTERY_STATUS, 0, 0);    // read
     DirectCommands(ADDR_ALARM_RAW_STATUS, 0, 0);
-
     CommandSubcommands(ADDR_RESET);    // Resets the BQ769x2 registers
     HAL_Delay(60);
 
     bms_otp_check();
-    BQ769x2_ReadSafetyStatus();
     bms_init();    // Configure all of the BQ769x2 register settings
 
     HAL_Delay(10);
