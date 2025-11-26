@@ -202,6 +202,38 @@ void transmit_fw_version(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+HAL_StatusTypeDef can_msg_ack(uint32_t can_id, uint32_t timeout)
+{
+    CAN_TxHeaderTypeDef tx_header;
+    uint8_t             tx_data[8];
+    uint32_t            tx_mailbox;
+
+    uint32_t tickstart = HAL_GetTick();
+
+    /* Wait until tx buffer is available */
+    while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0u)
+    {
+        /* Check for the Timeout */
+        if (timeout != HAL_MAX_DELAY)
+        {
+            if (((HAL_GetTick() - tickstart) > timeout) || (timeout == 0u))
+            {
+                return HAL_TIMEOUT;
+            }
+        }
+    }
+
+
+    tx_header.StdId = can_id;
+    tx_header.IDE   = CAN_ID_STD;
+    tx_header.RTR   = CAN_RTR_DATA;
+    tx_header.DLC   = 0u;
+
+    HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &tx_mailbox);
+
+    return HAL_OK;
+}
+
 HAL_StatusTypeDef can_msg_transmit(uint32_t can_id, uint8_t *pdata, uint32_t length, uint32_t timeout)
 {
     CAN_TxHeaderTypeDef tx_header;
@@ -815,20 +847,20 @@ void can_decode_cmd(can_message_t *msg)
         {
             case CAN_ID_BMS_STATE:
                 cmd = (can_command_t)msg->data[0];
-                can_msg_transmit(CAN_ID_BMS_STATE, NULL, 0, 100u);
+                can_msg_ack(CAN_ID_BMS_STATE, 100u);
                 break;
 
             case CAN_ID_BMS_BALANCE:
                 cmd = (can_command_t)msg->data[0];
-                can_msg_transmit(CAN_ID_BMS_BALANCE, NULL, 0, 100u);
+                can_msg_ack(CAN_ID_BMS_BALANCE, 100u);
                 break;
 
             case CAN_ID_BMS_SET_PROTECTIONS:
-                can_msg_transmit(CAN_ID_BMS_SET_PROTECTIONS, NULL, 0, 100u);
+                can_msg_ack(CAN_ID_BMS_SET_PROTECTIONS, 100u);
                 break;
 
             case CAN_ID_BMS_RESET:
-                can_msg_transmit(CAN_ID_BMS_RESET, NULL, 0, 100u);
+                can_msg_ack(CAN_ID_BMS_RESET, 100u);
                 osDelay(pdMS_TO_TICKS(10u));
                 HAL_NVIC_SystemReset();
                 break;
@@ -836,7 +868,7 @@ void can_decode_cmd(can_message_t *msg)
             case CAN_ID_FW_UPDATE:
                 if (msg->data[0] == CAN_ID_BMS)
                 {
-                    can_msg_transmit(CAN_ID_FW_UPDATE, NULL, 0, 100u);
+                    can_msg_ack(CAN_ID_FW_UPDATE, 100u);
                     HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, FW_UPDATE_BYTE_SEQUENCE_1);
                     HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, FW_UPDATE_BYTE_SEQUENCE_2);
                     HAL_Delay(1);
@@ -853,11 +885,11 @@ void can_decode_cmd(can_message_t *msg)
         switch (msg->header.StdId)
         {
             case CAN_ID_BMS_GET_PROTECTIONS:
-                can_msg_transmit(CAN_ID_BMS_PROTECTIONS, NULL, 0, 100u);
+                can_msg_ack(CAN_ID_BMS_PROTECTIONS, 100u);
                 break;
 
             case CAN_ID_BMS_GET_FAULTS:
-                can_msg_transmit(CAN_ID_BMS_FAULTS, NULL, 0, 100u);
+                can_msg_ack(CAN_ID_BMS_FAULTS, 100u);
                 break;
 
             case CAN_ID_BMS_GET_FW_VER:
