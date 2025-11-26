@@ -426,89 +426,78 @@ void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
 
 void bms_init()
 {
-    // Configures all parameters in device RAM
-
-    // Enter CONFIGUPDATE mode (Subcommand 0x0090) - It is required to be in CONFIG_UPDATE mode to program the device RAM settings
-    // See TRM for full description of CONFIG_UPDATE mode
     CommandSubcommands(ADDR_SET_CFGUPDATE);
 
-    // After entering CONFIG_UPDATE mode, RAM registers can be programmed. When programming RAM, checksum and length must also be
-    // programmed for the change to take effect. All of the RAM registers are described in detail in the BQ769x2 TRM.
-    // An easier way to find the descriptions is in the BQStudio Data Memory screen. When you move the mouse over the register name,
-    // a full description of the register and the bits will pop up on the screen.
-#if 0
-    // 'Power Config' - 0x9234 = 0x2D80
-    // Setting the DSLP_LDO bit allows the LDOs to remain active when the device goes into Deep Sleep mode
-    // Set wake speed bits to 00 for best performance
-    BQ769x2_SetRegister(PowerConfig, 0x2D80, 2);
+    // Set DSLP_LDO & Set wake speed bits to 00 for best performance
+    BQ769x2_SetRegister(POWER_CONFIG, 0x2D80, 2);
 
-    // 'REG0 Config' - set REG0_EN bit to enable pre-regulator
-    BQ769x2_SetRegister(REG0Config, 0x01, 1);
+    // Set DFETOFF pin to BOTHOFF
+    BQ769x2_SetRegister(DFETOFF_PIN_CONFIG, 0x42, 1);
 
-    // 'REG12 Config' - Enable REG1 with 3.3V output (0x0D for 3.3V, 0x0F for 5V)
-    BQ769x2_SetRegister(REG12Config, 0x0D, 1);
+    // ALERT pin drives high (REG1 voltage)when a protection has triggered
+    BQ769x2_SetRegister(ALERT_PIN_CONFIG, 0x2A, 1);
 
-    // Set DFETOFF pin to control BOTH CHG and DSG FET - 0x92FB = 0x42 (set to 0x00 to disable)
-    BQ769x2_SetRegister(DFETOFFPinConfig, 0x42, 1);
+    // Set TS1 to measure Cell Temperature
+    BQ769x2_SetRegister(TS1_CONFIG, 0x07, 1);
 
-    // Set up ALERT Pin - 0x92FC = 0x2A
-    // This configures the ALERT pin to drive high (REG1 voltage) when enabled.
-    // The ALERT pin can be used as an interrupt to the MCU when a protection has triggered or new measurements are available
-    BQ769x2_SetRegister(ALERTPinConfig, 0x2A, 1);
+    // Set TS3 to measure Cell Temperature
+    BQ769x2_SetRegister(TS3_CONFIG, 0x07, 1);
 
-    // Set TS1 to measure Cell Temperature - 0x92FD = 0x07
-    BQ769x2_SetRegister(TS1Config, 0x07, 1);
+    // Set DCHG pin Active Low
+    BQ769x2_SetRegister(DCHG_PIN_CONFIG, 0x8B, 1);
 
-    // Set TS3 to measure FET Temperature - 0x92FF = 0x0F
-    BQ769x2_SetRegister(TS3Config, 0x0F, 1);
+    // Set DDSG pin Active Low
+    BQ769x2_SetRegister(DDSG_PIN_CONFIG, 0x8B, 1);
 
-    // Set HDQ to measure Cell Temperature - 0x9300 = 0x07
-    BQ769x2_SetRegister(HDQPinConfig, 0x00, 1);   // No thermistor installed on EVM HDQ pin, so set to 0x00
+    // Enable 10 cells
+    // VC16-VC15, VC9-VC0. VC15-VC9 shorted for 10S pack
+    BQ769x2_SetRegister(VCELL_MODE, 0x81FF, 2);
 
-    // 'VCell Mode' - Enable 16 cells - 0x9304 = 0x0000; Writing 0x0000 sets the default of 16 cells
-    BQ769x2_SetRegister(VCellMode, 0x0000, 2);
+    // Enables SCD (short-circuit), OCD1 (over-current in discharge),
+    // OCC (over-current in charge), COV (over-voltage), CUV (under-voltage)
+    BQ769x2_SetRegister(ENABLED_PROTECTIONS_A, 0xBC, 1);
 
-    // Enable protections in 'Enabled Protections A' 0x9261 = 0xBC
-    // Enables SCD (short-circuit), OCD1 (over-current in discharge), OCC (over-current in charge),
-    // COV (over-voltage), CUV (under-voltage)
-    BQ769x2_SetRegister(EnabledProtectionsA, 0xBC, 1);
+    // Enables OTINT (internal over-temperature), OTD (over-temperature in discharge),
+    // OTC (over-temperature in charge), UTINT (internal under-temperature),
+    // UTD (under-temperature in discharge), UTC (under-temperature in charge)
+    BQ769x2_SetRegister(ENABLED_PROTECTIONS_B, 0x77, 1);
 
-    // Enable all protections in 'Enabled Protections B' 0x9262 = 0xF7
-    // Enables OTF (over-temperature FET), OTINT (internal over-temperature), OTD (over-temperature in discharge),
-    // OTC (over-temperature in charge), UTINT (internal under-temperature), UTD (under-temperature in discharge), UTC (under-temperature in charge)
-    BQ769x2_SetRegister(EnabledProtectionsB, 0xF7, 1);
+    // Balancing while in Relax or Charge modes
+    BQ769x2_SetRegister(BALANCING_CONFIGURATION, 0x03, 1);
 
-    // 'Default Alarm Mask' - 0x..82 Enables the FullScan and ADScan bits, default value = 0xF800
-    BQ769x2_SetRegister(DefaultAlarmMask, 0xF882, 2);
+    // Set up CUV at 2479 mV
+    BQ769x2_SetRegister(CUV_THRESHOLD, 0x31, 1);
 
-    // Set up Cell Balancing Configuration - 0x9335 = 0x03   -  Automated balancing while in Relax or Charge modes
-    // Also see "Cell Balancing with BQ769x2 Battery Monitors" document on ti.com
-    BQ769x2_SetRegister(BalancingConfiguration, 0x03, 1);
+    // Set up COV at 4200 mV
+    BQ769x2_SetRegister(COV_THRESHOLD, 0x53, 1);
 
-    // Set up CUV (under-voltage) Threshold - 0x9275 = 0x31 (2479 mV)
-    // CUV Threshold is this value multiplied by 50.6mV
-    BQ769x2_SetRegister(CUVThreshold, 0x31, 1);
+    // Set up OCC at 6A (6.72A) BMS current limit for 2P pack -> 0x03.
+    // for 3P pack can reach 10A
+    BQ769x2_SetRegister(OCC_THRESHOLD, 0x03, 1);
 
-    // Set up COV (over-voltage) Threshold - 0x9278 = 0x55 (4301 mV)
-    // COV Threshold is this value multiplied by 50.6mV
-    BQ769x2_SetRegister(COVThreshold, 0x55, 1);
+    // Set up OCD1 at 14A (14.4A) BMS current limit for 2P pack -> 0x03.
+    // for 3P pack can reach 21.6A
+    BQ769x2_SetRegister(OCD1_THRESHOLD, 0x07, 1);
 
-    // Set up OCC (over-current in charge) Threshold - 0x9280 = 0x05 (10 mV = 10A across 1mOhm sense resistor) Units in 2mV
-    BQ769x2_SetRegister(OCCThreshold, 0x05, 1);
+    // Set up SCD at 100A
+    BQ769x2_SetRegister(SCD_THRESHOLD, 0x05, 1);
 
-    // Set up OCD1 Threshold - 0x9282 = 0x0A (20 mV = 20A across 1mOhm sense resistor) units of 2mV
-    BQ769x2_SetRegister(OCD1Threshold, 0x0A, 1);
-
-    // Set up SCD Threshold - 0x9286 = 0x05 (100 mV = 100A across 1mOhm sense resistor)  0x05=100mV
-    BQ769x2_SetRegister(SCDThreshold, 0x05, 1);
-
-    // Set up SCD Delay - 0x9287 = 0x03 (30 us) Enabled with a delay of (value - 1) * 15 �s; min value of 1
-    BQ769x2_SetRegister(SCDDelay, 0x03, 1);
+    // Set up SCD Delay 30us
+    BQ769x2_SetRegister(SCD_DELAY, 0x03, 1);
 
     // Set up SCDL Latch Limit to 1 to set SCD recovery only with load removal 0x9295 = 0x01
     // If this is not set, then SCD will recover based on time (SCD Recovery Time parameter).
-    BQ769x2_SetRegister(SCDLLatchLimit, 0x01, 1);
-#endif
+    BQ769x2_SetRegister(SCDL_LATCH_LIMIT, 0x01, 1);
+
+    // Set up OTC at 45degC
+    BQ769x2_SetRegister(OTC_THRESHOLD, 0x2D, 1);
+
+    // Set OTC recovery at 45degC
+    BQ769x2_SetRegister(OTC_RECOVERY, 0x2D, 1);
+
+    // Set UTD at -20degC
+    // BQ769x2_SetRegister(UTD_THRESHOLD, 0xEC, 1); // Disabled for further data format correctness
+
     // Exit CONFIGUPDATE mode  - Subcommand 0x0092
     CommandSubcommands(ADDR_EXIT_CFGUPDATE);
 }
@@ -942,7 +931,7 @@ void bms_otp_check(void)
             CommandSubcommands(ADDR_EXIT_CFGUPDATE);
             return;
         }
-        
+
         Subcommands(ADDR_OTP_WR_CHECK, 0x0000, R);
 
         uint8_t txreg[2];
@@ -1062,18 +1051,19 @@ int main(void)
 
 		AlarmBits = BQ769x2_ReadAlarmStatus();
 		if (AlarmBits & 0x80) {  // Check if FULLSCAN is complete. If set, new measurements are available
-      		BQ769x2_ReadAllVoltages();
+//      		BQ769x2_ReadAllVoltages();
       		Pack_Current = BQ769x2_ReadCurrent();
-      		Temperature[0] = BQ769x2_ReadTemperature(TS1Temperature);
-      		Temperature[1] = BQ769x2_ReadTemperature(TS3Temperature);
-			DirectCommands(AlarmStatus, 0x0080, W);  // Clear the FULLSCAN bit
+//      		Temperature[0] = BQ769x2_ReadTemperature(TS1Temperature);
+//      		Temperature[1] = BQ769x2_ReadTemperature(TS3Temperature);
+//			DirectCommands(AlarmStatus, 0x0080, W);  // Clear the FULLSCAN bit
 		}
 				
 		if (AlarmBits & 0xC000) {  // If Safety Status bits are showing in AlarmStatus register
 			BQ769x2_ReadSafetyStatus(); // Read the Safety Status registers to find which protections have triggered
 			if (ProtectionsTriggered & 1) {
-				HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_SET); }// Turn on the LED to indicate Protection has triggered
-				DirectCommands(AlarmStatus, 0xF800, W); // Clear the Safety Status Alarm bits.
+//				HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_SET); }// Turn on the LED to indicate Protection has triggered
+			}
+//				DirectCommands(AlarmStatus, 0xF800, W); // Clear the Safety Status Alarm bits.
 			}
 		else
 		{
@@ -1081,7 +1071,7 @@ int main(void)
 				BQ769x2_ReadSafetyStatus();
 				if (!(ProtectionsTriggered & 1)) 
 				{
-					HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_RESET);
+//					HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_RESET);
 				} 
 			} // Turn off the LED if Safety Status has cleared which means the protection condition is no longer present
 		}
@@ -1479,8 +1469,8 @@ static void MX_GPIO_Init(void)
 
     /*Configure GPIO pin : BAT_MON_ALERT_Pin */
     GPIO_InitStruct.Pin  = BAT_MON_ALERT_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(BAT_MON_ALERT_GPIO_Port, &GPIO_InitStruct);
 
     /*Configure GPIO pin : PC15 */
@@ -1569,7 +1559,8 @@ void StartDefaultTask(void *argument)
     /* Infinite loop */
     for (;;)
     {
-        osDelay(1);
+        HAL_GPIO_TogglePin(TP5_GPIO_Port, TP5_Pin);
+        osDelay(pdMS_TO_TICKS(500));
     }
     /* USER CODE END 5 */
 }
