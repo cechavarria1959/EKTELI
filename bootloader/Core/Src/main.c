@@ -258,6 +258,8 @@ void main_deinit_peripherals(void)
     HAL_RCC_DeInit();
     HAL_DeInit();
 }
+
+volatile uint8_t version = 1;
 /* USER CODE END 0 */
 
 /**
@@ -292,6 +294,13 @@ int main(void)
     MX_RTC_Init();
     MX_CRC_Init();
     /* USER CODE BEGIN 2 */
+#if 0 // for testing only
+    if (version == 2)
+    {
+        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0);
+        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0);
+    }
+#endif
 
     if (is_bootloader_mode_requested())
     {

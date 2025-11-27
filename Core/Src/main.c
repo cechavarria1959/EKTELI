@@ -45,6 +45,13 @@ typedef enum
     FW_UPDATE
 } can_command_t;
 
+typedef enum
+{
+    BMS_OTP_OK = 0,
+    BMS_OTP_NOT_PROGRAMMED = 1,
+    BMS_OTP_ERROR = 2
+} bms_otp_status_t;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -57,7 +64,7 @@ typedef enum
 #define W  1    // Write; Used in DirectCommands and Subcommands functions
 #define W2 2    // Write data with two bytes; Used in Subcommands function
 
-#define MIN_PACK_VOLTAGE_MV  (33000u)    // 3.3V per cell * 10 cells
+#define MIN_PACK_VOLTAGE_MV  (25000u)    // 2.5V per cell * 10 cells
 #define MAX_PACK_VOLTAGE_MV  (42000u)    // 4.2V
 #define DIFF_PACK_VOLTAGE_MV (MAX_PACK_VOLTAGE_MV - MIN_PACK_VOLTAGE_MV)
 
@@ -77,7 +84,7 @@ typedef enum
 #define FW_UPDATE_BYTE_SEQUENCE_1 (0x5555AAAA)
 #define FW_UPDATE_BYTE_SEQUENCE_2 (0xAAAA5555)
 
-#define CAN_ID_BMS (0x10)
+#define CAN_ID_BMS (0x10)   // BMS CAN Node ID
 
 #define APPLICATION_ADDRESS (0x08004000u)    // Defined in linker script FLASH ORIGIN
 #define FLASH_LENGTH        (0x0001C000u)    // Defined in linker script FLASH LENGTH
@@ -222,7 +229,6 @@ HAL_StatusTypeDef can_msg_ack(uint32_t can_id, uint32_t timeout)
             }
         }
     }
-
 
     tx_header.StdId = can_id;
     tx_header.IDE   = CAN_ID_STD;
@@ -861,6 +867,7 @@ void can_decode_cmd(can_message_t *msg)
 
             case CAN_ID_BMS_RESET:
                 can_msg_ack(CAN_ID_BMS_RESET, 100u);
+                CommandSubcommands(ADDR_RESET);
                 osDelay(pdMS_TO_TICKS(10u));
                 HAL_NVIC_SystemReset();
                 break;
@@ -931,8 +938,10 @@ void transmit_fw_version(void)
  * to the BAT pin and the device must be in FULLACCESS mode. More details
  * can be found in BQ769x2 Calibration and OTP Programming Guide SLUAA32A.
  */
-void bms_otp_check(void)
+bms_otp_status_t bms_otp_check(void)
 {
+    bms_otp_status_t otp_status = BMS_OTP_ERROR;
+
     Subcommands(REG12_CONFIG, 0, R);
     if (RX_32Byte[0] != SPI_BMS_REG12_CONFIG)
     {
@@ -941,6 +950,7 @@ void bms_otp_check(void)
         {
             /* Enter FULLACCESS mode sequence */
             /* By default device is in FULLACCESS */
+            return BMS_OTP_ERROR;
         }
 
         CommandSubcommands(ADDR_SET_CFGUPDATE);
@@ -950,9 +960,7 @@ void bms_otp_check(void)
         Subcommands(REG12_CONFIG, 0, R);
         if (RX_32Byte[0] != SPI_BMS_REG12_CONFIG)
         {
-            // Retry
-            __NOP();
-            return;
+            return BMS_OTP_NOT_PROGRAMMED;
         }
 
         CommandSubcommands(ADDR_SET_CFGUPDATE);
@@ -961,7 +969,7 @@ void bms_otp_check(void)
         {
             // Conditions for OTP programming NOT met
             CommandSubcommands(ADDR_EXIT_CFGUPDATE);
-            return;
+            return BMS_OTP_NOT_PROGRAMMED;
         }
 
         Subcommands(ADDR_OTP_WR_CHECK, 0x0000, R);
@@ -976,7 +984,7 @@ void bms_otp_check(void)
         {
             // OTP programming NOT possible
             CommandSubcommands(ADDR_EXIT_CFGUPDATE);
-            return;
+            return BMS_OTP_NOT_PROGRAMMED;
         }
 
         txreg[0] = ADDR_OTP_WRITE & 0xff;
@@ -988,15 +996,19 @@ void bms_otp_check(void)
         if (RX_32Byte[0] != 0x80)
         {
             // OTP programming FAILED
-            __NOP();
+            return BMS_OTP_NOT_PROGRAMMED;
         }
         CommandSubcommands(ADDR_EXIT_CFGUPDATE);
+
+        otp_status = BMS_OTP_OK;
     }
     else
     {
         // OTP already programmed
-        __NOP();
+        otp_status = BMS_OTP_OK;
     }
+
+    return otp_status;
 }
 
 char opening_msg[] = "\r\n\r\nEKTELI BMS, version 1.0\r\n";
@@ -1061,55 +1073,16 @@ int main(void)
     Subcommands(ADDR_DEVICE_NUMBER, 0, 0);
     DirectCommands(ADDR_BATTERY_STATUS, 0, 0);    // read
     DirectCommands(ADDR_ALARM_RAW_STATUS, 0, 0);
-    CommandSubcommands(ADDR_RESET);    // Resets the BQ769x2 registers
     HAL_Delay(60);
 
-    bms_otp_check();
+    bms_otp_status_t otp_status = bms_otp_check();
+    
     bms_init();    // Configure all of the BQ769x2 register settings
 
     HAL_Delay(10);
     CommandSubcommands(ADDR_FET_ENABLE);    // Enable the CHG and DSG FETs
     HAL_Delay(10);
-    CommandSubcommands(ADDR_SLEEP_DISABLE);    // Sleep mode is enabled by default. For this example, Sleep is disabled to
-                                               // demonstrate full-speed measurements in Normal mode.
-#if 0
-    while (1)
-  {
-    //Reads Cell, Stack, Pack, LD Voltages, Pack Current and TS1/TS3 Temperatures in a loop
-	//This basic example polls the Alarm Status register to see if protections have triggered or new measurements are ready
-	//The ALERT pin can also be used as an interrupt to the microcontroller for fastest response time instead of polling
-	//In this example the LED on the microcontroller board will be turned on to indicate a protection has triggered and will 
-	//be turned off if the protection condition has cleared.
-
-		AlarmBits = BQ769x2_ReadAlarmStatus();
-		if (AlarmBits & 0x80) {  // Check if FULLSCAN is complete. If set, new measurements are available
-//      		BQ769x2_ReadAllVoltages();
-      		Pack_Current = BQ769x2_ReadCurrent();
-//      		Temperature[0] = BQ769x2_ReadTemperature(TS1Temperature);
-//      		Temperature[1] = BQ769x2_ReadTemperature(TS3Temperature);
-//			DirectCommands(AlarmStatus, 0x0080, W);  // Clear the FULLSCAN bit
-		}
-				
-		if (AlarmBits & 0xC000) {  // If Safety Status bits are showing in AlarmStatus register
-			BQ769x2_ReadSafetyStatus(); // Read the Safety Status registers to find which protections have triggered
-			if (ProtectionsTriggered & 1) {
-//				HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_SET); }// Turn on the LED to indicate Protection has triggered
-			}
-//				DirectCommands(AlarmStatus, 0xF800, W); // Clear the Safety Status Alarm bits.
-			}
-		else
-		{
-			if (ProtectionsTriggered & 1) {
-				BQ769x2_ReadSafetyStatus();
-				if (!(ProtectionsTriggered & 1)) 
-				{
-//					HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_RESET);
-				} 
-			} // Turn off the LED if Safety Status has cleared which means the protection condition is no longer present
-		}
-		HAL_Delay(20);  // repeat loop every 20 ms
-  }
-#endif
+    CommandSubcommands(ADDR_SLEEP_DISABLE);
     /* USER CODE END 2 */
 
     /* Init scheduler */
@@ -1160,6 +1133,12 @@ int main(void)
 
     /* USER CODE BEGIN RTOS_THREADS */
     /* add threads, ... */
+
+    if (otp_status != BMS_OTP_OK)
+    {
+        osThreadSuspend(defaultTaskHandle);
+    }
+    
     /* USER CODE END RTOS_THREADS */
 
     /* USER CODE BEGIN RTOS_EVENTS */
