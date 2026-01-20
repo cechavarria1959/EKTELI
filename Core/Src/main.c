@@ -49,7 +49,10 @@ typedef enum
 {
     BMS_OTP_OK = 0,
     BMS_OTP_NOT_PROGRAMMED = 1,
-    BMS_OTP_ERROR = 2
+    BMS_OTP_BQ_NOT_DETECTED,
+    BMS_OTP_CONDITIONS_NOT_MET,
+    BMS_OTP_FAILED,
+    BMS_OTP_ERROR
 } bms_otp_status_t;
 
 /* USER CODE END PTD */
@@ -909,7 +912,7 @@ void can_decode_cmd(can_message_t *msg)
     }
 }
 
-volatile uint16_t version = 100;    // e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
+volatile uint16_t version = 110;    // e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
 
 void transmit_fw_version(void)
 {
@@ -938,6 +941,7 @@ void transmit_fw_version(void)
  * to the BAT pin and the device must be in FULLACCESS mode. More details
  * can be found in BQ769x2 Calibration and OTP Programming Guide SLUAA32A.
  */
+#define EMPTY_BUFFER ("\0\0\0\0")
 bms_otp_status_t bms_otp_check(void)
 {
     bms_otp_status_t otp_status = BMS_OTP_ERROR;
@@ -945,6 +949,12 @@ bms_otp_status_t bms_otp_check(void)
     Subcommands(REG12_CONFIG, 0, R);
     if (RX_32Byte[0] != SPI_BMS_REG12_CONFIG)
     {
+        if(memcmp(RX_32Byte, EMPTY_BUFFER, 4) == 0 &&
+           memcmp(rxdata, EMPTY_BUFFER, 4) == 0)
+        {
+            return BMS_OTP_BQ_NOT_DETECTED;
+        }
+
         DirectCommands(ADDR_BATTERY_STATUS, 0, R);
         if ((rxdata[1] & 0x03) != 0x01)
         {
@@ -968,8 +978,29 @@ bms_otp_status_t bms_otp_check(void)
         if ((rxdata[0] & 0x80) >> 7)
         {
             // Conditions for OTP programming NOT met
+            Subcommands(ADDR_OTP_WR_CHECK, 0x0000, R); // check failed condition
+            if(RX_32Byte[0] & 0x01)
+            {
+                // stack voltage is above the allowed OTP programming voltage
+                HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 3722); // ~3V
+            }
+            else if(RX_32Byte[0] & 0x02)
+            {
+                // stack voltage is below the allowed OTP programming voltage
+                HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 2480); // ~2V
+            }
+            else if(RX_32Byte[0] & 0x04)
+            {
+                //internal temperature is above the allowed OTP programming temperature range
+                HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 1240); // ~1V
+            }
+            else
+            {
+                HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0);
+            }
+
             CommandSubcommands(ADDR_EXIT_CFGUPDATE);
-            return BMS_OTP_NOT_PROGRAMMED;
+            return BMS_OTP_CONDITIONS_NOT_MET;
         }
 
         Subcommands(ADDR_OTP_WR_CHECK, 0x0000, R);
@@ -996,7 +1027,7 @@ bms_otp_status_t bms_otp_check(void)
         if (RX_32Byte[0] != 0x80)
         {
             // OTP programming FAILED
-            return BMS_OTP_NOT_PROGRAMMED;
+            return BMS_OTP_FAILED;
         }
         CommandSubcommands(ADDR_EXIT_CFGUPDATE);
 
@@ -1049,6 +1080,10 @@ int main(void)
     MX_RTC_Init();
     MX_CRC_Init();
     /* USER CODE BEGIN 2 */
+    
+    // Set DAC output to 3.3V to signal main app is started
+    HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
+    HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 4095);
 
     HAL_CAN_Start(&hcan1);
 
@@ -1117,7 +1152,7 @@ int main(void)
 
     /* Create the thread(s) */
     /* creation of defaultTask */
-    defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+    defaultTaskHandle = osThreadNew(StartDefaultTask, (void *)(uintptr_t)otp_status, &defaultTask_attributes);
 
     /* creation of BMSMonitor */
     BMSMonitorHandle = osThreadNew(bms_monitor, NULL, &BMSMonitor_attributes);
@@ -1133,12 +1168,12 @@ int main(void)
 
     /* USER CODE BEGIN RTOS_THREADS */
     /* add threads, ... */
-
+#if 0
     if (otp_status != BMS_OTP_OK)
     {
         osThreadSuspend(defaultTaskHandle);
     }
-    
+#endif
     /* USER CODE END RTOS_THREADS */
 
     /* USER CODE BEGIN RTOS_EVENTS */
@@ -1567,11 +1602,46 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 void StartDefaultTask(void *argument)
 {
     /* USER CODE BEGIN 5 */
+    bms_otp_status_t otp_status = (bms_otp_status_t)(uintptr_t)argument;
+
+    uint32_t delay_ms;
+
+    switch (otp_status)
+    {
+        case BMS_OTP_OK:
+            delay_ms = 500u;
+            break;
+            
+        case BMS_OTP_NOT_PROGRAMMED:
+            delay_ms = 250u;
+            break;
+            
+        case BMS_OTP_BQ_NOT_DETECTED:
+            delay_ms = 167u;
+            break;
+            
+        case BMS_OTP_CONDITIONS_NOT_MET:
+            delay_ms = 125u;
+            break;
+            
+        case BMS_OTP_FAILED:
+            delay_ms = 100u;
+            break;
+            
+        case BMS_OTP_ERROR:
+            delay_ms = 83u;
+            break;
+            
+        default:
+            delay_ms = 50u;
+            break;
+    }
+
     /* Infinite loop */
     for (;;)
     {
         HAL_GPIO_TogglePin(TP5_GPIO_Port, TP5_Pin);
-        osDelay(pdMS_TO_TICKS(500));
+        osDelay(pdMS_TO_TICKS(delay_ms));
     }
     /* USER CODE END 5 */
 }
