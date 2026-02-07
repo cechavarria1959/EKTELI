@@ -15,12 +15,16 @@
 
 
 /* Private macros ------------------------------------------------------------*/
+#define R  0    // Read; Used in DirectCommands and Subcommands functions
+#define W  1    // Write; Used in DirectCommands and Subcommands functions
+#define W2 2    // Write data with two bytes; Used in Subcommands function
 
 
 /* Private typedef -----------------------------------------------------------*/
 
 
 /* Exported types and variables ----------------------------------------------*/
+extern uint8_t RX_32Byte[32];
 
 
 /* Private (static) variables ------------------------------------------------*/
@@ -135,6 +139,49 @@ void CommandSubcommands(uint16_t command)    // For Command only Subcommands
 
     SPI_WriteReg(0x3E, TX_Reg, 2);
     HAL_Delay(2);
+}
+
+void Subcommands(uint16_t command, uint16_t data, uint8_t type)
+// See the TRM or the BQ76952 header file for a full list of Subcommands
+{
+    // security keys and Manu_data writes dont work with this function (reading these commands works)
+    // max readback size is 32 bytes i.e. DASTATUS, CUV/COV snapshot
+    uint8_t TX_Reg[4]    = {0x00, 0x00, 0x00, 0x00};
+    uint8_t TX_Buffer[2] = {0x00, 0x00};
+
+    // TX_Reg in little endian format
+    TX_Reg[0] = command & 0xff;
+    TX_Reg[1] = (command >> 8) & 0xff;
+
+    if (type == R)
+    {    // read
+        SPI_WriteReg(0x3E, TX_Reg, 2);
+        HAL_Delay(2);
+        SPI_ReadReg(0x40, RX_32Byte, 32);    // RX_32Byte is a global variable
+    }
+    else if (type == W)
+    {
+        // FET_Control, REG12_Control
+        TX_Reg[2] = data & 0xff;
+        SPI_WriteReg(0x3E, TX_Reg, 3);
+        HAL_Delay(1);
+        TX_Buffer[0] = Checksum(TX_Reg, 3);
+        TX_Buffer[1] = 0x05;    // combined length of registers address and data
+        SPI_WriteReg(0x60, TX_Buffer, 2);
+        HAL_Delay(1);
+    }
+    else if (type == W2)
+    {    // write data with 2 bytes
+        // CB_Active_Cells, CB_SET_LVL
+        TX_Reg[2] = data & 0xff;
+        TX_Reg[3] = (data >> 8) & 0xff;
+        SPI_WriteReg(0x3E, TX_Reg, 4);
+        HAL_Delay(1);
+        TX_Buffer[0] = Checksum(TX_Reg, 4);
+        TX_Buffer[1] = 0x06;    // combined length of registers address and data
+        SPI_WriteReg(0x60, TX_Buffer, 2);
+        HAL_Delay(1);
+    }
 }
 
 void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
@@ -282,92 +329,6 @@ void bms_read_register(uint8_t address)
 #endif
 
     // Process received data in rx_buffer if needed
-}
-
-void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
-{
-    uint8_t TX_Buffer[2]  = {0x00, 0x00};
-    uint8_t TX_RegData[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-
-    // TX_RegData in little endian format
-    TX_RegData[0] = reg_addr & 0xff;
-    TX_RegData[1] = (reg_addr >> 8) & 0xff;
-    TX_RegData[2] = reg_data & 0xff;    // 1st byte of data
-
-    switch (datalen)
-    {
-        case 1:    // 1 byte datalength
-            SPI_WriteReg(0x3E, TX_RegData, 3);
-            delayUS(2000);
-            TX_Buffer[0] = Checksum(TX_RegData, 3);
-            TX_Buffer[1] = 0x05;                 // combined length of register address and data
-            SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
-            delayUS(2000);
-            break;
-        case 2:    // 2 byte datalength
-            TX_RegData[3] = (reg_data >> 8) & 0xff;
-            SPI_WriteReg(0x3E, TX_RegData, 4);
-            delayUS(2000);
-            TX_Buffer[0] = Checksum(TX_RegData, 4);
-            TX_Buffer[1] = 0x06;                 // combined length of register address and data
-            SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
-            delayUS(2000);
-            break;
-        case 4:    // 4 byte datalength, Only used for CCGain and Capacity Gain
-            TX_RegData[3] = (reg_data >> 8) & 0xff;
-            TX_RegData[4] = (reg_data >> 16) & 0xff;
-            TX_RegData[5] = (reg_data >> 24) & 0xff;
-            SPI_WriteReg(0x3E, TX_RegData, 6);
-            delayUS(2000);
-            TX_Buffer[0] = Checksum(TX_RegData, 6);
-            TX_Buffer[1] = 0x08;                 // combined length of register address and data
-            SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
-            delayUS(2000);
-            break;
-    }
-}
-
-void Subcommands(uint16_t command, uint16_t data, uint8_t type)
-// See the TRM or the BQ76952 header file for a full list of Subcommands
-{
-    // security keys and Manu_data writes dont work with this function (reading these commands works)
-    // max readback size is 32 bytes i.e. DASTATUS, CUV/COV snapshot
-    uint8_t TX_Reg[4]    = {0x00, 0x00, 0x00, 0x00};
-    uint8_t TX_Buffer[2] = {0x00, 0x00};
-
-    // TX_Reg in little endian format
-    TX_Reg[0] = command & 0xff;
-    TX_Reg[1] = (command >> 8) & 0xff;
-
-    if (type == R)
-    {    // read
-        SPI_WriteReg(0x3E, TX_Reg, 2);
-        delayUS(2000);
-        SPI_ReadReg(0x40, RX_32Byte, 32);    // RX_32Byte is a global variable
-    }
-    else if (type == W)
-    {
-        // FET_Control, REG12_Control
-        TX_Reg[2] = data & 0xff;
-        SPI_WriteReg(0x3E, TX_Reg, 3);
-        delayUS(1000);
-        TX_Buffer[0] = Checksum(TX_Reg, 3);
-        TX_Buffer[1] = 0x05;    // combined length of registers address and data
-        SPI_WriteReg(0x60, TX_Buffer, 2);
-        delayUS(1000);
-    }
-    else if (type == W2)
-    {    // write data with 2 bytes
-        // CB_Active_Cells, CB_SET_LVL
-        TX_Reg[2] = data & 0xff;
-        TX_Reg[3] = (data >> 8) & 0xff;
-        SPI_WriteReg(0x3E, TX_Reg, 4);
-        delayUS(1000);
-        TX_Buffer[0] = Checksum(TX_Reg, 4);
-        TX_Buffer[1] = 0x06;    // combined length of registers address and data
-        SPI_WriteReg(0x60, TX_Buffer, 2);
-        delayUS(1000);
-    }
 }
 
 void DirectCommands(uint8_t command, uint16_t data, uint8_t type)

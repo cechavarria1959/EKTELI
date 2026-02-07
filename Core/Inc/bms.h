@@ -467,6 +467,7 @@ typedef enum
 /* Exported function prototypes ----------------------------------------------*/
 void bms_init(void);
 void CommandSubcommands(uint16_t command);
+void Subcommands(uint16_t command, uint16_t data, uint8_t type);
 void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen);
 unsigned char Checksum(unsigned char *ptr, unsigned char len);
 
