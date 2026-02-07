@@ -294,7 +294,7 @@ int main(void)
     MX_RTC_Init();
     MX_CRC_Init();
     /* USER CODE BEGIN 2 */
-#if 0 // for testing only
+#if 0    // for testing only
     if (version == 2)
     {
         HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0);
