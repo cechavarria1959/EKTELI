@@ -469,6 +469,8 @@ typedef enum
 
 /* Exported function prototypes ----------------------------------------------*/
 void bms_init(void);
+void bms_dfet_off(void);
+void bms_reset_shutdown(void);
 
 void CommandSubcommands(uint16_t command);
 void Subcommands(uint16_t command, uint16_t data, uint8_t type);

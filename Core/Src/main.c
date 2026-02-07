@@ -768,6 +768,8 @@ void StartDefaultTask(void *argument)
 void bms_monitor(void *argument)
 {
     /* USER CODE BEGIN bms_monitor */
+    UNUSED(argument);
+
     /* Infinite loop */
     for (;;)
     {
@@ -786,6 +788,8 @@ void bms_monitor(void *argument)
 void fuel_gauge_monitor(void *argument)
 {
     /* USER CODE BEGIN fuel_gauge_monitor */
+    UNUSED(argument);
+
     uint8_t data[8] = {0};
 
     data[0] = 0x7E;
@@ -812,6 +816,8 @@ void fuel_gauge_monitor(void *argument)
 void can_monitor(void *argument)
 {
     /* USER CODE BEGIN can_monitor */
+    UNUSED(argument);
+
     can_message_t msg;
     for (;;)
     {
@@ -834,6 +840,8 @@ void can_monitor(void *argument)
 void bms_main_task(void *argument)
 {
     /* USER CODE BEGIN bms_main_task */
+    UNUSED(argument);
+
     uint8_t buffer[8];
 
     /* Infinite loop */
@@ -986,6 +994,9 @@ __NO_RETURN __attribute__((naked)) void assert_failed(const uint8_t *file, uint3
     /* USER CODE BEGIN 6 */
     /* User can add his own implementation to report the file name and line number,
        ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+    UNUSED(file);
+    UNUSED(line);
+
     /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

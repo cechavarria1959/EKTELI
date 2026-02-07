@@ -256,6 +256,7 @@ void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
             SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
             HAL_Delay(2);
             break;
+
         case 2:    // 2 byte datalength
             TX_RegData[3] = (reg_data >> 8) & 0xff;
             SPI_WriteReg(0x3E, TX_RegData, 4);
@@ -265,6 +266,7 @@ void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
             SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
             HAL_Delay(2);
             break;
+
         case 4:    // 4 byte datalength, Only used for CCGain and Capacity Gain
             TX_RegData[3] = (reg_data >> 8) & 0xff;
             TX_RegData[4] = (reg_data >> 16) & 0xff;
@@ -275,6 +277,10 @@ void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
             TX_Buffer[1] = 0x08;                 // combined length of register address and data
             SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
             HAL_Delay(2);
+            break;
+
+        default:
+            /* nothing to do */
             break;
     }
 }
@@ -562,7 +568,7 @@ uint8_t get_balancing_status(void)
     Subcommands(ADDR_CB_ACTIVE_CELLS, 0, R);
 
     uint16_t balancing_active_cells = (RX_32Byte[1] * 256 + RX_32Byte[0]);
-    if (balancing_active_cells != 0xFFFF || balancing_active_cells != 0x0000)
+    if (balancing_active_cells != 0x0000)
     {
         balancing_status = 1;
     }
@@ -626,6 +632,21 @@ uint8_t get_fet_status(void)
 }
 
 /**
+ * @brief Disable discharge FETs
+ * @details The DCHG pin is used to control the external discharge FETs.
+ * assert the DFETOFF pin to keep the FETs off. As long as the pin is asserted,
+ * the FETs are blocked from being reenabled. When the pin is deasserted,
+ * the BQ76952 will reenable the FETs if nothing is blocking them being
+ * reenabled (such as fault conditions still present, or the CFETOFF or
+ * DFETOFF pins are asserted).
+ * @note The DFETOFF or BOTHOFF functionality disables both the DSG FET and
+ * the PDSG FET when asserted.
+ */
+void bms_dfet_off(void)
+{
+}
+
+/**
  * @brief Reset or shutdown BMS monitor
  * @details During normal operation, the RST_SHUT pin should be driven low.
  * When the pin is driven high, the BMS will immediately reset most of the
@@ -638,21 +659,6 @@ uint8_t get_fet_status(void)
  * REG2 LDOs, preregulator, and the REG1 and REG2 LDOs.
  */
 void bms_reset_shutdown(void)
-{
-}
-
-/**
- * @brief Disable discharge FETs
- * @details The DCHG pin is used to control the external discharge FETs.
- * assert the DFETOFF pin to keep the FETs off. As long as the pin is asserted,
- * the FETs are blocked from being reenabled. When the pin is deasserted,
- * the BQ76952 will reenable the FETs if nothing is blocking them being
- * reenabled (such as fault conditions still present, or the CFETOFF or
- * DFETOFF pins are asserted).
- * @note The DFETOFF or BOTHOFF functionality disables both the DSG FET and
- * the PDSG FET when asserted.
- */
-void bms_dfet_off(void)
 {
 }
 
