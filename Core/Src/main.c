@@ -49,17 +49,6 @@
 #define MAX_PACK_VOLTAGE_MV  (42000u)    // 4.2V
 #define DIFF_PACK_VOLTAGE_MV (MAX_PACK_VOLTAGE_MV - MIN_PACK_VOLTAGE_MV)
 
-
-#define SPI_READ_FRAME(addr)  (addr & 0x7F)
-#define SPI_WRITE_FRAME(addr) ((addr & 0x7F) | 0x80)
-#define SPI_DUMMY_BYTE        (0x00)
-#define SPI_INVALID_RX_BUFFER (0xFFFF)
-
-#define SPI_BMS_ERROR_16BIT   (0xFFFF)
-#define SPI_CLOCK_NOT_POWERED (0xFFFFFF)
-#define SPI_CRC_ERROR         (0xFFFFAA)
-#define SPI_BMS_TIMEOUT       (0xFFFF00)
-
 #define APPLICATION_ADDRESS (0x08004000u)    // Defined in linker script FLASH ORIGIN
 #define FLASH_LENGTH        (0x0001C000u)    // Defined in linker script FLASH LENGTH
 /* USER CODE END PD */
@@ -137,19 +126,7 @@ uint16_t Pack_Current   = 0x00;
 uint8_t rxdata[4];
 uint8_t RX_32Byte[32] = {0x00};
 
-extern uint8_t UV_Fault;    // under-voltage fault state
-extern uint8_t OV_Fault;    // over-voltage fault state
-extern uint8_t OT_Fault;    // over-temperature fault state
-extern uint8_t OC_Fault;    // over-current fault state
-extern uint8_t PF_Fault;    // permanent-fault state
-
-extern uint8_t ProtectionsTriggered;       // Set to 1 if any protection triggers
-extern uint8_t PermanentFaultTriggered;    // Set to 1 if any permanent fault triggers
-
-extern uint8_t DSG;    // discharge FET state
-extern uint8_t CHG;    // charge FET state
-
-can_message_t rx_msg;
+const uint16_t version = 110;    // e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
 
 /* USER CODE END PV */
 
@@ -174,8 +151,6 @@ void        bms_main_task(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-const uint16_t version = 110;    // e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
-
 void transmit_fw_version(void)
 {
     uint8_t buffer[6];
@@ -940,15 +915,7 @@ void bms_main_task(void *argument)
             fuse_ok = 1;    // ok
         }
 
-        if (!ProtectionsTriggered && !PermanentFaultTriggered)
-        {
-            buffer[0] = 0;
-        }
-        else
-        {
-            buffer[0] = (PF_Fault << 4) | (OC_Fault << 3) | (OT_Fault << 2) | (UV_Fault << 1) | OV_Fault;
-        }
-
+        buffer[0] = bms_get_faults();
         buffer[1] = (min_voltage >> 8) & 0xFF;
         buffer[2] = min_voltage & 0xFF;
         buffer[3] = (max_voltage >> 8) & 0xFF;
@@ -971,7 +938,7 @@ void bms_main_task(void *argument)
 
         buffer[5] = get_charging_status();
         buffer[6] = get_bms_status();
-        buffer[7] = (CHG << 1) | DSG;
+        buffer[7] = get_fet_status();
         can_msg_transmit(CAN_ID_BMS_OPERATION, (uint8_t *)&buffer, 8, 100u);
 
         osDelay(pdMS_TO_TICKS(500));

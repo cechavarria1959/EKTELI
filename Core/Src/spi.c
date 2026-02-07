@@ -18,6 +18,16 @@
 /* Private macros ------------------------------------------------------------*/
 #define MAX_BUFFER_SIZE (10)
 
+#define SPI_READ_FRAME(addr)  (addr & 0x7F)
+#define SPI_WRITE_FRAME(addr) ((addr & 0x7F) | 0x80)
+#define SPI_DUMMY_BYTE        (0x00)
+#define SPI_INVALID_RX_BUFFER (0xFFFF)
+
+#define SPI_BMS_ERROR_16BIT   (0xFFFF)
+#define SPI_CLOCK_NOT_POWERED (0xFFFFFF)
+#define SPI_CRC_ERROR         (0xFFFFAA)
+#define SPI_BMS_TIMEOUT       (0xFFFF00)
+
 
 /* Private typedef -----------------------------------------------------------*/
 

@@ -487,6 +487,8 @@ void BQ769x2_ReadSafetyStatus(void);
 void BQ769x2_Readcell_voltages(void);
 void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen);
 
+uint8_t bms_get_faults(void);
+uint8_t get_fet_status(void);
 uint8_t get_bms_status(void);
 uint8_t get_charging_status(void);
 uint8_t get_balancing_status(void);

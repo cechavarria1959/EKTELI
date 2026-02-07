@@ -607,7 +607,23 @@ uint8_t get_charging_status(void)
     return charging_status;
 }
 
-#if 0    // taking out until refactoring
+uint8_t bms_get_faults(void)
+{
+    uint8_t faults = 0;
+
+    if (ProtectionsTriggered || PermanentFaultTriggered)
+    {
+        faults = (PF_Fault << 4) | (OC_Fault << 3) | (OT_Fault << 2) | (UV_Fault << 1) | OV_Fault;
+    }
+
+    return faults;
+}
+
+uint8_t get_fet_status(void)
+{
+    return (CHG << 1) | DSG;
+}
+
 /**
  * @brief Reset or shutdown BMS monitor
  * @details During normal operation, the RST_SHUT pin should be driven low.
@@ -638,101 +654,6 @@ void bms_reset_shutdown(void)
 void bms_dfet_off(void)
 {
 }
-
-void bms_start_transaction(void)
-{
-    /* send CONTROL_STATUS() command to awaken bms */
-
-    /* if bms respond not valid transaction, wait at least 135us and retry */
-
-    /* read bms status and proceed normal program flow */
-}
-
-void bms_send_command(uint8_t address, uint8_t data)
-{
-    /* check wether write or read command and call the respective function */
-    if (address & 0x80)
-    {
-        bms_write_register(address, data);
-    }
-    else
-    {
-        bms_read_register(address);
-    }
-}
-
-void bms_write_register(uint8_t address, uint8_t data)
-{
-    uint8_t  tx_buffer[3];
-    uint8_t  rx_buffer[3];
-    uint16_t crc;
-
-    tx_buffer[0] = SPI_WRITE_FRAME(address);
-    tx_buffer[1] = data;
-
-#if 0
-    if(crc_enabled)
-    {
-        crc = crc8(tx_buffer, 2);
-        tx_buffer[2] = crc;
-    }
-
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // CS LOW
-    HAL_Delay(1); // tCSS 50us min
-    HAL_SPI_TransmitReceive(&hspi1, tx_buffer, rx_buffer, 3, HAL_MAX_DELAY);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); // CS HIGH
-#endif
-
-    // Check response in rx_buffer if needed
-}
-
-void bms_read_register(uint8_t address)
-{
-    uint8_t  tx_buffer[3];
-    uint8_t  rx_buffer[3];
-    uint16_t crc;
-
-    tx_buffer[0] = SPI_READ_FRAME(address);
-    tx_buffer[1] = SPI_DUMMY_BYTE;
-
-#if 0
-    if(crc_enabled)
-    {
-        crc = crc8(tx_buffer, 2);
-        tx_buffer[2] = crc;
-    }
-
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // CS LOW
-    HAL_Delay(1); // tCSS 50us min
-    HAL_SPI_TransmitReceive(&hspi1, tx_buffer, rx_buffer, 3, HAL_MAX_DELAY);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); // CS HIGH
-#endif
-
-    // Process received data in rx_buffer if needed
-}
-
-void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
-// See the TRM or the BQ76952 header file for a full list of Direct Commands
-{    // type: R = read, W = write
-    uint8_t TX_data[2] = {0x00, 0x00};
-
-    // little endian format
-    TX_data[0] = data & 0xff;
-    TX_data[1] = (data >> 8) & 0xff;
-
-    if (type == R)
-    {                                        // Read
-        SPI_ReadReg(command, RX_data, 2);    // RX_data is a global variable
-        delayUS(2000);
-    }
-    if (type == W)
-    {    // write
-        // Control_status, alarm_status, alarm_enable all 2 bytes long
-        SPI_WriteReg(command, TX_data, 2);
-        delayUS(2000);
-    }
-}
-#endif    // taking out until refactoring
 
 
 /* Private user code ---------------------------------------------------------*/
