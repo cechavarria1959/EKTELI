@@ -10,6 +10,7 @@
 /* Private includes ----------------------------------------------------------*/
 #include <stdint.h>
 #include "bms.h"
+#include "stm32l4xx_hal.h"
 
 
 /* Private macros ------------------------------------------------------------*/
@@ -43,10 +44,99 @@
  *
  * reg0 must be enabled and also set the voltages for reg1 and reg2
  **/
-void bms_init(void)
+void bms_init()
 {
+    CommandSubcommands(ADDR_SET_CFGUPDATE);
+
+    // Set DSLP_LDO & Set wake speed bits to 00 for best performance
+    BQ769x2_SetRegister(POWER_CONFIG, 0x2D80, 2);
+
+    // Set DFETOFF pin to BOTHOFF
+    BQ769x2_SetRegister(DFETOFF_PIN_CONFIG, 0x42, 1);
+
+    // ALERT pin drives high (REG1 voltage)when a protection has triggered
+    BQ769x2_SetRegister(ALERT_PIN_CONFIG, 0x2A, 1);
+
+    // Set TS1 to measure Cell Temperature
+    BQ769x2_SetRegister(TS1_CONFIG, 0x07, 1);
+
+    // Set TS3 to measure Cell Temperature
+    BQ769x2_SetRegister(TS3_CONFIG, 0x07, 1);
+
+    // Set DCHG pin Active Low
+    BQ769x2_SetRegister(DCHG_PIN_CONFIG, 0x8B, 1);
+
+    // Set DDSG pin Active Low
+    BQ769x2_SetRegister(DDSG_PIN_CONFIG, 0x8B, 1);
+
+    // Enable 10 cells
+    // VC16-VC15, VC9-VC0. VC15-VC9 shorted for 10S pack
+    BQ769x2_SetRegister(VCELL_MODE, 0x81FF, 2);
+
+    // Enables SCD (short-circuit), OCD1 (over-current in discharge),
+    // OCC (over-current in charge), COV (over-voltage), CUV (under-voltage)
+    BQ769x2_SetRegister(ENABLED_PROTECTIONS_A, 0xBC, 1);
+
+    // Enables OTINT (internal over-temperature), OTD (over-temperature in discharge),
+    // OTC (over-temperature in charge), UTINT (internal under-temperature),
+    // UTD (under-temperature in discharge), UTC (under-temperature in charge)
+    BQ769x2_SetRegister(ENABLED_PROTECTIONS_B, 0x77, 1);
+
+    // Balancing while in Relax or Charge modes
+    BQ769x2_SetRegister(BALANCING_CONFIGURATION, 0x03, 1);
+
+    // Set up CUV at 2479 mV
+    BQ769x2_SetRegister(CUV_THRESHOLD, 0x31, 1);
+
+    // Set up COV at 4200 mV
+    BQ769x2_SetRegister(COV_THRESHOLD, 0x53, 1);
+
+    // Set up OCC at 6A (6.72A) BMS current limit for 2P pack -> 0x03.
+    // for 3P pack can reach 10A
+    BQ769x2_SetRegister(OCC_THRESHOLD, 0x03, 1);
+
+    // Set up OCD1 at 14A (14.4A) BMS current limit for 2P pack -> 0x03.
+    // for 3P pack can reach 21.6A
+    BQ769x2_SetRegister(OCD1_THRESHOLD, 0x07, 1);
+
+    // Set up SCD at 100A
+    BQ769x2_SetRegister(SCD_THRESHOLD, 0x05, 1);
+
+    // Set up SCD Delay 30us
+    BQ769x2_SetRegister(SCD_DELAY, 0x03, 1);
+
+    // Set up SCDL Latch Limit to 1 to set SCD recovery only with load removal 0x9295 = 0x01
+    // If this is not set, then SCD will recover based on time (SCD Recovery Time parameter).
+    BQ769x2_SetRegister(SCDL_LATCH_LIMIT, 0x01, 1);
+
+    // Set up OTC at 45degC
+    BQ769x2_SetRegister(OTC_THRESHOLD, 0x2D, 1);
+
+    // Set OTC recovery at 45degC
+    BQ769x2_SetRegister(OTC_RECOVERY, 0x2D, 1);
+
+    // Set UTD at -20degC
+    // BQ769x2_SetRegister(UTD_THRESHOLD, 0xEC, 1); // Disabled for further data format correctness
+
+    // Exit CONFIGUPDATE mode  - Subcommand 0x0092
+    CommandSubcommands(ADDR_EXIT_CFGUPDATE);
 }
 
+void CommandSubcommands(uint16_t command)    // For Command only Subcommands
+// See the TRM or the BQ76952 header file for a full list of Command-only subcommands
+{    // For DEEPSLEEP/SHUTDOWN subcommand you will need to call this function twice consecutively
+
+    uint8_t TX_Reg[2] = {0x00, 0x00};
+
+    // TX_Reg in little endian format
+    TX_Reg[0] = command & 0xff;
+    TX_Reg[1] = (command >> 8) & 0xff;
+
+    SPI_WriteReg(0x3E, TX_Reg, 2);
+    HAL_Delay(2);
+}
+
+#if 0 //taking out until refactoring
 /**
  * @brief Reset or shutdown BMS monitor
  * @details During normal operation, the RST_SHUT pin should be driven low.
@@ -191,20 +281,6 @@ void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
             delayUS(2000);
             break;
     }
-}
-
-void CommandSubcommands(uint16_t command)    // For Command only Subcommands
-// See the TRM or the BQ76952 header file for a full list of Command-only subcommands
-{    // For DEEPSLEEP/SHUTDOWN subcommand you will need to call this function twice consecutively
-
-    uint8_t TX_Reg[2] = {0x00, 0x00};
-
-    // TX_Reg in little endian format
-    TX_Reg[0] = command & 0xff;
-    TX_Reg[1] = (command >> 8) & 0xff;
-
-    SPI_WriteReg(0x3E, TX_Reg, 2);
-    delayUS(2000);
 }
 
 void Subcommands(uint16_t command, uint16_t data, uint8_t type)
@@ -364,3 +440,5 @@ unsigned char Checksum(unsigned char *ptr, unsigned char len)
 
     return (checksum);
 }
+
+#endif //taking out until refactoring

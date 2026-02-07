@@ -5,9 +5,24 @@
  *      Author: CesarO
  */
 
+/**
+ * @file    bms.h
+ * @brief
+ * @details
+ *
+ * @author  CesarO
+ * @date    2025-10-07
+ *
+ * @copyright Copyright (c) 2025 Ekteli.
+ */
+
 #ifndef INC_BMS_H_
 #define INC_BMS_H_
 
+/* Includes ------------------------------------------------------------------*/
+
+
+/* Exported types ------------------------------------------------------------*/
 typedef enum
 {
     ADDR_CONTROL_STATUS       = 0x00,
@@ -441,5 +456,15 @@ typedef enum
     TIME_SWAP_TO_HDQ          = 500,
     TIME_READ_CAL1            = 630
 } bms_command_time_t;
+
+/* Exported constants and defines --------------------------------------------*/
+
+
+/* Exported macros -----------------------------------------------------------*/
+
+
+/* Exported function prototypes ----------------------------------------------*/
+void bms_init(void);
+void CommandSubcommands(uint16_t command);
 
 #endif /* INC_BMS_H_ */

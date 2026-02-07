@@ -22,6 +22,7 @@
 #include "can_driver.h"
 #include "can_messages.h"
 #include "main.h"
+#include "bms.h"
 
 
 /* Private macros ------------------------------------------------------------*/
