@@ -38,6 +38,7 @@ extern "C"
     /* Exported types ------------------------------------------------------------*/
     /* Add exported objects as needed */
     /* USER CODE BEGIN ET */
+    extern DAC_HandleTypeDef hdac1;
     extern CAN_HandleTypeDef hcan1;
     extern RTC_HandleTypeDef hrtc;
     extern SPI_HandleTypeDef hspi1;

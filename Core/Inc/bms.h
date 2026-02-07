@@ -458,6 +458,16 @@ typedef enum
     TIME_READ_CAL1            = 630
 } bms_command_time_t;
 
+typedef enum
+{
+    BMS_OTP_OK = 0,
+    BMS_OTP_NOT_PROGRAMMED,
+    BMS_OTP_BQ_NOT_DETECTED,
+    BMS_OTP_CONDITIONS_NOT_MET,
+    BMS_OTP_FAILED,
+    BMS_OTP_ERROR
+} bms_otp_status_t;
+
 /* Exported constants and defines --------------------------------------------*/
 
 
@@ -466,9 +476,32 @@ typedef enum
 
 /* Exported function prototypes ----------------------------------------------*/
 void bms_init(void);
+
 void CommandSubcommands(uint16_t command);
 void Subcommands(uint16_t command, uint16_t data, uint8_t type);
+void DirectCommands(uint8_t command, uint16_t data, uint8_t type);
+
+void BQ769x2_ReadPFStatus(void);
+void BQ769x2_ReadFETStatus(void);
+void BQ769x2_ReadSafetyStatus(void);
+void BQ769x2_Readcell_voltages(void);
 void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen);
+
+uint8_t get_bms_status(void);
+uint8_t get_charging_status(void);
+uint8_t get_balancing_status(void);
+
+int16_t BQ769x2_ReadCurrent(void);
+
+uint16_t BQ769x2_ReadAlarmStatus(void);
+uint16_t get_largest_cell_voltage(void);
+uint16_t get_smallest_cell_voltage(void);
+uint16_t BQ769x2_ReadVoltage(uint8_t command);
+
+float BQ769x2_ReadTemperature(uint8_t command);
+
 unsigned char Checksum(unsigned char *ptr, unsigned char len);
+
+bms_otp_status_t bms_otp_check(void);
 
 #endif /* INC_BMS_H_ */
