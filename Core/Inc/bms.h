@@ -20,6 +20,7 @@
 #define INC_BMS_H_
 
 /* Includes ------------------------------------------------------------------*/
+#include <stdint.h>
 
 
 /* Exported types ------------------------------------------------------------*/
@@ -466,5 +467,7 @@ typedef enum
 /* Exported function prototypes ----------------------------------------------*/
 void bms_init(void);
 void CommandSubcommands(uint16_t command);
+void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen);
+unsigned char Checksum(unsigned char *ptr, unsigned char len);
 
 #endif /* INC_BMS_H_ */

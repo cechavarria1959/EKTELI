@@ -136,6 +136,49 @@ void CommandSubcommands(uint16_t command)    // For Command only Subcommands
     HAL_Delay(2);
 }
 
+void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
+{
+    uint8_t TX_Buffer[2]  = {0x00, 0x00};
+    uint8_t TX_RegData[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+    // TX_RegData in little endian format
+    TX_RegData[0] = reg_addr & 0xff;
+    TX_RegData[1] = (reg_addr >> 8) & 0xff;
+    TX_RegData[2] = reg_data & 0xff;    // 1st byte of data
+
+    switch (datalen)
+    {
+        case 1:    // 1 byte datalength
+            SPI_WriteReg(0x3E, TX_RegData, 3);
+            HAL_Delay(2);
+            TX_Buffer[0] = Checksum(TX_RegData, 3);
+            TX_Buffer[1] = 0x05;                 // combined length of register address and data
+            SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
+            HAL_Delay(2);
+            break;
+        case 2:    // 2 byte datalength
+            TX_RegData[3] = (reg_data >> 8) & 0xff;
+            SPI_WriteReg(0x3E, TX_RegData, 4);
+            HAL_Delay(2);
+            TX_Buffer[0] = Checksum(TX_RegData, 4);
+            TX_Buffer[1] = 0x06;                 // combined length of register address and data
+            SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
+            HAL_Delay(2);
+            break;
+        case 4:    // 4 byte datalength, Only used for CCGain and Capacity Gain
+            TX_RegData[3] = (reg_data >> 8) & 0xff;
+            TX_RegData[4] = (reg_data >> 16) & 0xff;
+            TX_RegData[5] = (reg_data >> 24) & 0xff;
+            SPI_WriteReg(0x3E, TX_RegData, 6);
+            HAL_Delay(2);
+            TX_Buffer[0] = Checksum(TX_RegData, 6);
+            TX_Buffer[1] = 0x08;                 // combined length of register address and data
+            SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
+            HAL_Delay(2);
+            break;
+    }
+}
+
 #if 0 //taking out until refactoring
 /**
  * @brief Reset or shutdown BMS monitor
@@ -424,6 +467,7 @@ void SPI_ReadReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count)
         delayUS(500);
     }
 }
+#endif //taking out until refactoring
 
 
 /* Private user code ---------------------------------------------------------*/
@@ -434,11 +478,11 @@ unsigned char Checksum(unsigned char *ptr, unsigned char len)
     unsigned char checksum = 0;
 
     for (i = 0; i < len; i++)
+    {
         checksum += ptr[i];
+    }
 
     checksum = 0xff & ~checksum;
 
     return (checksum);
 }
-
-#endif //taking out until refactoring
