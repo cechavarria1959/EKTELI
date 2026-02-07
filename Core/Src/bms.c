@@ -30,11 +30,12 @@
 
 
 /* Exported types and variables ----------------------------------------------*/
-extern uint8_t rxdata[4];
-extern uint8_t RX_32Byte[32];
 
 
 /* Private (static) variables ------------------------------------------------*/
+uint8_t rxdata[4] = {0};
+uint8_t RX_32Byte[32] = {0};
+
 uint16_t CellVoltage[16] = {0};
 
 uint8_t value_PFStatusA;    // Permanent Fail Status Register A

@@ -41,10 +41,6 @@
 #error "Must define BMS_MODEL_10S or BMS_MODEL_14S"
 #endif
 
-#define R  0    // Read; Used in DirectCommands and Subcommands functions
-#define W  1    // Write; Used in DirectCommands and Subcommands functions
-#define W2 2    // Write data with two bytes; Used in Subcommands function
-
 #define MIN_PACK_VOLTAGE_MV  (25000u)    // 2.5V per cell * 10 cells
 #define MAX_PACK_VOLTAGE_MV  (42000u)    // 4.2V
 #define DIFF_PACK_VOLTAGE_MV (MAX_PACK_VOLTAGE_MV - MIN_PACK_VOLTAGE_MV)
@@ -119,13 +115,9 @@ osSemaphoreId_t         semaphore_1Handle;
 const osSemaphoreAttr_t semaphore_1_attributes = {
     .name = "semaphore_1"};
 /* USER CODE BEGIN PV */
-uint16_t AlarmBits      = 0x00;
 float    Temperature[3] = {0.0f};
-uint16_t Pack_Current   = 0x00;
 
-uint8_t rxdata[4];
-uint8_t RX_32Byte[32] = {0x00};
-
+char opening_msg[] = "\r\n\r\nEKTELI BMS, version 1.0\r\n";
 const uint16_t version = 110;    // e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
 
 /* USER CODE END PV */
@@ -170,8 +162,6 @@ void transmit_fw_version(void)
     /* Transmit on CAN */
     can_msg_transmit(CAN_ID_BMS_FW_VER, buffer, 6, 100u);
 }
-
-char opening_msg[] = "\r\n\r\nEKTELI BMS, version 1.0\r\n";
 /* USER CODE END 0 */
 
 /**
@@ -904,7 +894,7 @@ void bms_main_task(void *argument)
             max_temp = 215.0f;
         }
 
-        AlarmBits = BQ769x2_ReadAlarmStatus();
+        uint16_t AlarmBits = BQ769x2_ReadAlarmStatus();
         uint8_t fuse_ok;
         if (AlarmBits & 0x0008)
         {
