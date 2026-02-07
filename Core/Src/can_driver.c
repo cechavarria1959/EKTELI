@@ -1,10 +1,3 @@
-/*
- * can_driver.c
- *
- *  Created on: Nov 13, 2025
- *      Author: CesarO
- */
-
 /**
  * @file    can_driver.c
  * @brief   CAN driver implementation.
@@ -19,6 +12,7 @@
 /* Private includes ----------------------------------------------------------*/
 #include <stdint.h>
 #include <string.h>
+#include "bms.h"
 #include "can_driver.h"
 #include "can_messages.h"
 #include "main.h"

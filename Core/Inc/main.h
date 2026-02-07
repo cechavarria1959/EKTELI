@@ -30,16 +30,18 @@ extern "C"
 /* Includes ------------------------------------------------------------------*/
 #include "stm32l4xx_hal.h"
 
-    /* Private includes ----------------------------------------------------------*/
-    /* USER CODE BEGIN Includes */
-    #include "cmsis_os.h"
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include "cmsis_os.h"
     /* USER CODE END Includes */
 
     /* Exported types ------------------------------------------------------------*/
     /* Add exported objects as needed */
     /* USER CODE BEGIN ET */
-    extern CAN_HandleTypeDef hcan1;
-    extern RTC_HandleTypeDef hrtc;
+    extern DAC_HandleTypeDef  hdac1;
+    extern CAN_HandleTypeDef  hcan1;
+    extern RTC_HandleTypeDef  hrtc;
+    extern SPI_HandleTypeDef  hspi1;
     extern osMessageQueueId_t CANQueueHandle;
     /* USER CODE END ET */
 
@@ -56,8 +58,8 @@ extern "C"
     /* Exported functions prototypes ---------------------------------------------*/
     void Error_Handler(void);
 
-/* USER CODE BEGIN EFP */
-void transmit_fw_version(void);
+    /* USER CODE BEGIN EFP */
+    void transmit_fw_version(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
