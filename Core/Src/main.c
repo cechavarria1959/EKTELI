@@ -47,7 +47,7 @@ typedef enum
 
 typedef enum
 {
-    BMS_OTP_OK = 0,
+    BMS_OTP_OK             = 0,
     BMS_OTP_NOT_PROGRAMMED = 1,
     BMS_OTP_BQ_NOT_DETECTED,
     BMS_OTP_CONDITIONS_NOT_MET,
@@ -87,7 +87,7 @@ typedef enum
 #define FW_UPDATE_BYTE_SEQUENCE_1 (0x5555AAAA)
 #define FW_UPDATE_BYTE_SEQUENCE_2 (0xAAAA5555)
 
-#define CAN_ID_BMS (0x10)   // BMS CAN Node ID
+#define CAN_ID_BMS (0x10)    // BMS CAN Node ID
 
 #define APPLICATION_ADDRESS (0x08004000u)    // Defined in linker script FLASH ORIGIN
 #define FLASH_LENGTH        (0x0001C000u)    // Defined in linker script FLASH LENGTH
@@ -949,8 +949,8 @@ bms_otp_status_t bms_otp_check(void)
     Subcommands(REG12_CONFIG, 0, R);
     if (RX_32Byte[0] != SPI_BMS_REG12_CONFIG)
     {
-        if(memcmp(RX_32Byte, EMPTY_BUFFER, 4) == 0 &&
-           memcmp(rxdata, EMPTY_BUFFER, 4) == 0)
+        if (memcmp(RX_32Byte, EMPTY_BUFFER, 4) == 0 &&
+            memcmp(rxdata, EMPTY_BUFFER, 4) == 0)
         {
             return BMS_OTP_BQ_NOT_DETECTED;
         }
@@ -978,21 +978,21 @@ bms_otp_status_t bms_otp_check(void)
         if ((rxdata[0] & 0x80) >> 7)
         {
             // Conditions for OTP programming NOT met
-            Subcommands(ADDR_OTP_WR_CHECK, 0x0000, R); // check failed condition
-            if(RX_32Byte[0] & 0x01)
+            Subcommands(ADDR_OTP_WR_CHECK, 0x0000, R);    // check failed condition
+            if (RX_32Byte[0] & 0x01)
             {
                 // stack voltage is above the allowed OTP programming voltage
-                HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 3722); // ~3V
+                HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 3722);    // ~3V
             }
-            else if(RX_32Byte[0] & 0x02)
+            else if (RX_32Byte[0] & 0x02)
             {
                 // stack voltage is below the allowed OTP programming voltage
-                HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 2480); // ~2V
+                HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 2480);    // ~2V
             }
-            else if(RX_32Byte[0] & 0x04)
+            else if (RX_32Byte[0] & 0x04)
             {
-                //internal temperature is above the allowed OTP programming temperature range
-                HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 1240); // ~1V
+                // internal temperature is above the allowed OTP programming temperature range
+                HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 1240);    // ~1V
             }
             else
             {
@@ -1080,7 +1080,7 @@ int main(void)
     MX_RTC_Init();
     MX_CRC_Init();
     /* USER CODE BEGIN 2 */
-    
+
     // Set DAC output to 3.3V to signal main app is started
     HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
     HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 4095);
@@ -1111,7 +1111,7 @@ int main(void)
     HAL_Delay(60);
 
     bms_otp_status_t otp_status = bms_otp_check();
-    
+
     bms_init();    // Configure all of the BQ769x2 register settings
 
     HAL_Delay(10);
@@ -1525,17 +1525,24 @@ static void MX_GPIO_Init(void)
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-    /*Configure GPIO pins : RST_SHUT_Pin DFETOFF_Pin TP5_Pin CAN_SILENT_Pin */
-    GPIO_InitStruct.Pin   = RST_SHUT_Pin | DFETOFF_Pin | TP5_Pin | CAN_SILENT_Pin;
+    /*Configure GPIO pin : RST_SHUT_Pin */
+    GPIO_InitStruct.Pin   = RST_SHUT_Pin;
     GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull  = GPIO_NOPULL;
+    GPIO_InitStruct.Pull  = GPIO_PULLDOWN;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    HAL_GPIO_Init(RST_SHUT_GPIO_Port, &GPIO_InitStruct);
 
     /*Configure GPIO pins : DDSG_Pin DCHG_Pin */
     GPIO_InitStruct.Pin  = DDSG_Pin | DCHG_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    /*Configure GPIO pins : DFETOFF_Pin TP5_Pin CAN_SILENT_Pin */
+    GPIO_InitStruct.Pin   = DFETOFF_Pin | TP5_Pin | CAN_SILENT_Pin;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull  = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     /*Configure GPIO pin : SPI_CS_Pin */
@@ -1611,27 +1618,27 @@ void StartDefaultTask(void *argument)
         case BMS_OTP_OK:
             delay_ms = 500u;
             break;
-            
+
         case BMS_OTP_NOT_PROGRAMMED:
             delay_ms = 250u;
             break;
-            
+
         case BMS_OTP_BQ_NOT_DETECTED:
             delay_ms = 167u;
             break;
-            
+
         case BMS_OTP_CONDITIONS_NOT_MET:
             delay_ms = 125u;
             break;
-            
+
         case BMS_OTP_FAILED:
             delay_ms = 100u;
             break;
-            
+
         case BMS_OTP_ERROR:
             delay_ms = 83u;
             break;
-            
+
         default:
             delay_ms = 50u;
             break;
@@ -1674,6 +1681,14 @@ void bms_monitor(void *argument)
 void fuel_gauge_monitor(void *argument)
 {
     /* USER CODE BEGIN fuel_gauge_monitor */
+    uint8_t data[8] = {0};
+
+    data[0] = 0x7E;
+    data[1] = 0x7F;
+
+    HAL_I2C_IsDeviceReady(&hi2c1, 0xAB, 3, 100);
+    HAL_I2C_Master_Transmit(&hi2c1, 0xAA, data, 2, 100);
+    HAL_I2C_Master_Receive(&hi2c1, 0xAB, &data[3], 2, 100);
     /* Infinite loop */
     for (;;)
     {
