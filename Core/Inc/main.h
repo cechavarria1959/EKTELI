@@ -40,6 +40,7 @@ extern "C"
     /* USER CODE BEGIN ET */
     extern CAN_HandleTypeDef hcan1;
     extern RTC_HandleTypeDef hrtc;
+    extern SPI_HandleTypeDef hspi1;
     extern osMessageQueueId_t CANQueueHandle;
     /* USER CODE END ET */
 

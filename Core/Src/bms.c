@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include "bms.h"
 #include "stm32l4xx_hal.h"
+#include "spi.h"
 
 
 /* Private macros ------------------------------------------------------------*/
@@ -388,83 +389,6 @@ void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
         // Control_status, alarm_status, alarm_enable all 2 bytes long
         SPI_WriteReg(command, TX_data, 2);
         delayUS(2000);
-    }
-}
-
-void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count)
-{
-    // SPI Write. Includes retries in case HFO has not started or if wait time is needed. See BQ76952 Software Development Guide for examples
-    uint8_t      addr;
-    uint8_t      TX_Buffer[MAX_BUFFER_SIZE] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-    unsigned int i;
-    unsigned int match;
-    unsigned int retries = 10;
-
-    match = 0;
-    addr  = 0x80 | reg_addr;
-
-    for (i = 0; i < count; i++)
-    {
-        TX_Buffer[0] = addr;
-        TX_Buffer[1] = reg_data[i];
-
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
-        HAL_SPI_TransmitReceive(&hspi1, TX_Buffer, rxdata, 2, 1);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
-
-        while ((match == 0) & (retries > 0))
-        {
-            delayUS(500);
-            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
-            HAL_SPI_TransmitReceive(&hspi1, TX_Buffer, rxdata, 2, 1);
-            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
-            if ((rxdata[0] == addr) & (rxdata[1] == reg_data[i]))
-                match = 1;
-            retries--;
-        }
-        match = 0;
-        addr += 1;
-        delayUS(500);
-    }
-}
-
-void SPI_ReadReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count)
-{
-    // SPI Read. Includes retries in case HFO has not started or if wait time is needed. See BQ76952 Software Development Guide for examples
-    uint8_t      addr;
-    uint8_t      TX_Buffer[MAX_BUFFER_SIZE] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-    unsigned int i;
-    unsigned int match;
-    unsigned int retries = 10;
-
-    match = 0;
-    addr  = reg_addr;
-
-    for (i = 0; i < count; i++)
-    {
-        TX_Buffer[0] = addr;
-        TX_Buffer[1] = 0xFF;
-
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
-        HAL_SPI_TransmitReceive(&hspi1, TX_Buffer, rxdata, 2, 1);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
-
-        while ((match == 0) & (retries > 0))
-        {
-            delayUS(500);
-            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
-            HAL_SPI_TransmitReceive(&hspi1, TX_Buffer, rxdata, 2, 1);
-            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
-            if (rxdata[0] == addr)
-            {
-                match       = 1;
-                reg_data[i] = rxdata[1];
-            }
-            retries--;
-        }
-        match = 0;
-        addr += 1;
-        delayUS(500);
     }
 }
 #endif //taking out until refactoring
