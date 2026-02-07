@@ -33,7 +33,6 @@
 
 
 /* Exported types and variables ----------------------------------------------*/
-extern uint8_t rxdata[4];
 
 
 /* Private (static) variables ------------------------------------------------*/
@@ -44,7 +43,7 @@ unsigned char CRC8(unsigned char *ptr, unsigned char len);
 
 
 /* Public user code ----------------------------------------------------------*/
-void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count)
+void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxdata[4])
 {
     // SPI Write. Includes retries in case HFO has not started or if wait time is needed. See BQ76952 Software Development Guide for examples
     uint8_t      addr;
@@ -83,7 +82,7 @@ void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count)
     }
 }
 
-void SPI_ReadReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count)
+void SPI_ReadReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxdata[4])
 {
     // SPI Read. Includes retries in case HFO has not started or if wait time is needed. See BQ76952 Software Development Guide for examples
     uint8_t      addr;

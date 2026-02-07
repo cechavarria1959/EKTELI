@@ -13,23 +13,10 @@
 #define INC_CAN_MESSAGES_H_
 
 /* Includes ------------------------------------------------------------------*/
-#include <stdint.h>
 
 
 /* Exported types ------------------------------------------------------------*/
-typedef enum
-{
-    BMS_STATE_INACTIVE    = 0,
-    BMS_STATE_ACTIVE      = 1,
-    BMS_STATE_SLEEP       = 2,
-    BMS_STATE_FAULT       = 3,
-    BMS_STATE_UNSPECIFIED = 4
-} bms_state_t;
 
-typedef enum
-{
-    BMS_CMD_NONE = 0
-} bms_command_t;
 
 /* Exported constants and defines --------------------------------------------*/
 /* CAN IDs */

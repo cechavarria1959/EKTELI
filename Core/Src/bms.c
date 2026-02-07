@@ -13,7 +13,6 @@
 #include "bms.h"
 #include "main.h"
 #include "spi.h"
-#include "stm32l4xx_hal.h"
 
 
 /* Private macros ------------------------------------------------------------*/
@@ -61,6 +60,7 @@ uint8_t DSG = 0;    // discharge FET state
 uint8_t CHG = 0;    // charge FET state
 
 /* Private function prototypes -----------------------------------------------*/
+unsigned char Checksum(unsigned char *ptr, unsigned char len);
 
 
 /* Public user code ----------------------------------------------------------*/
@@ -168,13 +168,13 @@ void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
 
     if (type == R)
     {                                       // Read
-        SPI_ReadReg(command, rxdata, 2);    // RX_data is a global variable
+        SPI_ReadReg(command, rxdata, 2, rxdata);    // RX_data is a global variable
         HAL_Delay(2);
     }
     if (type == W)
     {    // write
         // Control_status, alarm_status, alarm_enable all 2 bytes long
-        SPI_WriteReg(command, TX_data, 2);
+        SPI_WriteReg(command, TX_data, 2, rxdata);    // rxdata is a global variable but not used in this case
         HAL_Delay(2);
     }
 }
@@ -189,7 +189,7 @@ void CommandSubcommands(uint16_t command)    // For Command only Subcommands
     TX_Reg[0] = command & 0xff;
     TX_Reg[1] = (command >> 8) & 0xff;
 
-    SPI_WriteReg(0x3E, TX_Reg, 2);
+    SPI_WriteReg(0x3E, TX_Reg, 2, rxdata);
     HAL_Delay(2);
 }
 
@@ -207,19 +207,19 @@ void Subcommands(uint16_t command, uint16_t data, uint8_t type)
 
     if (type == R)
     {    // read
-        SPI_WriteReg(0x3E, TX_Reg, 2);
+        SPI_WriteReg(0x3E, TX_Reg, 2, rxdata);
         HAL_Delay(2);
-        SPI_ReadReg(0x40, RX_32Byte, 32);    // RX_32Byte is a global variable
+        SPI_ReadReg(0x40, RX_32Byte, 32, rxdata);    // RX_32Byte is a global variable
     }
     else if (type == W)
     {
         // FET_Control, REG12_Control
         TX_Reg[2] = data & 0xff;
-        SPI_WriteReg(0x3E, TX_Reg, 3);
+        SPI_WriteReg(0x3E, TX_Reg, 3, rxdata);
         HAL_Delay(1);
         TX_Buffer[0] = Checksum(TX_Reg, 3);
         TX_Buffer[1] = 0x05;    // combined length of registers address and data
-        SPI_WriteReg(0x60, TX_Buffer, 2);
+        SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);
         HAL_Delay(1);
     }
     else if (type == W2)
@@ -227,11 +227,11 @@ void Subcommands(uint16_t command, uint16_t data, uint8_t type)
         // CB_Active_Cells, CB_SET_LVL
         TX_Reg[2] = data & 0xff;
         TX_Reg[3] = (data >> 8) & 0xff;
-        SPI_WriteReg(0x3E, TX_Reg, 4);
+        SPI_WriteReg(0x3E, TX_Reg, 4, rxdata);
         HAL_Delay(1);
         TX_Buffer[0] = Checksum(TX_Reg, 4);
         TX_Buffer[1] = 0x06;    // combined length of registers address and data
-        SPI_WriteReg(0x60, TX_Buffer, 2);
+        SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);
         HAL_Delay(1);
     }
 }
@@ -249,21 +249,21 @@ void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
     switch (datalen)
     {
         case 1:    // 1 byte datalength
-            SPI_WriteReg(0x3E, TX_RegData, 3);
+            SPI_WriteReg(0x3E, TX_RegData, 3, rxdata);
             HAL_Delay(2);
             TX_Buffer[0] = Checksum(TX_RegData, 3);
             TX_Buffer[1] = 0x05;                 // combined length of register address and data
-            SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
+            SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);    // Write the checksum and length
             HAL_Delay(2);
             break;
 
         case 2:    // 2 byte datalength
             TX_RegData[3] = (reg_data >> 8) & 0xff;
-            SPI_WriteReg(0x3E, TX_RegData, 4);
+            SPI_WriteReg(0x3E, TX_RegData, 4, rxdata);
             HAL_Delay(2);
             TX_Buffer[0] = Checksum(TX_RegData, 4);
             TX_Buffer[1] = 0x06;                 // combined length of register address and data
-            SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
+            SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);    // Write the checksum and length
             HAL_Delay(2);
             break;
 
@@ -271,11 +271,11 @@ void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
             TX_RegData[3] = (reg_data >> 8) & 0xff;
             TX_RegData[4] = (reg_data >> 16) & 0xff;
             TX_RegData[5] = (reg_data >> 24) & 0xff;
-            SPI_WriteReg(0x3E, TX_RegData, 6);
+            SPI_WriteReg(0x3E, TX_RegData, 6, rxdata);
             HAL_Delay(2);
             TX_Buffer[0] = Checksum(TX_RegData, 6);
             TX_Buffer[1] = 0x08;                 // combined length of register address and data
-            SPI_WriteReg(0x60, TX_Buffer, 2);    // Write the checksum and length
+            SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);    // Write the checksum and length
             HAL_Delay(2);
             break;
 
@@ -483,9 +483,9 @@ bms_otp_status_t bms_otp_check(void)
         uint8_t txreg[2];
         txreg[0] = ADDR_OTP_WR_CHECK & 0xff;
         txreg[1] = (ADDR_OTP_WR_CHECK >> 8) & 0xff;
-        SPI_WriteReg(0x3E, txreg, 2);
+        SPI_WriteReg(0x3E, txreg, 2, rxdata);
         HAL_Delay(100);
-        SPI_ReadReg(0x40, RX_32Byte, 32);
+        SPI_ReadReg(0x40, RX_32Byte, 32, rxdata);
         if (RX_32Byte[0] != 0x80)
         {
             // OTP programming NOT possible
@@ -495,9 +495,9 @@ bms_otp_status_t bms_otp_check(void)
 
         txreg[0] = ADDR_OTP_WRITE & 0xff;
         txreg[1] = (ADDR_OTP_WRITE >> 8) & 0xff;
-        SPI_WriteReg(0x3E, txreg, 2);
+        SPI_WriteReg(0x3E, txreg, 2, rxdata);
         HAL_Delay(200);
-        SPI_ReadReg(0x40, RX_32Byte, 32);
+        SPI_ReadReg(0x40, RX_32Byte, 32, rxdata);
 
         if (RX_32Byte[0] != 0x80)
         {

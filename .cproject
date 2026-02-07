@@ -78,7 +78,6 @@
 									<listOptionValue builtIn="false" value="-Wfloat-equal"/>
 									<listOptionValue builtIn="false" value="-Wundef"/>
 									<listOptionValue builtIn="false" value="-Wcast-qual"/>
-									<listOptionValue builtIn="false" value="-Wshadow"/>
 									<listOptionValue builtIn="false" value="-Wuninitialized"/>
 									<listOptionValue builtIn="false" value="-Wshift-overflow"/>
 									<listOptionValue builtIn="false" value="-Wstrict-overflow"/>
@@ -204,7 +203,6 @@
 								<listOptionValue builtIn="false" value="-Wfloat-equal"/>
 								<listOptionValue builtIn="false" value="-Wundef"/>
 								<listOptionValue builtIn="false" value="-Wcast-qual"/>
-								<listOptionValue builtIn="false" value="-Wshadow"/>
 								<listOptionValue builtIn="false" value="-Wuninitialized"/>
 								<listOptionValue builtIn="false" value="-Wshift-overflow"/>
 								<listOptionValue builtIn="false" value="-Wstrict-overflow"/>
@@ -229,7 +227,6 @@
 								<listOptionValue builtIn="false" value="-Wfloat-equal"/>
 								<listOptionValue builtIn="false" value="-Wundef"/>
 								<listOptionValue builtIn="false" value="-Wcast-qual"/>
-								<listOptionValue builtIn="false" value="-Wshadow"/>
 								<listOptionValue builtIn="false" value="-Wuninitialized"/>
 								<listOptionValue builtIn="false" value="-Wshift-overflow"/>
 								<listOptionValue builtIn="false" value="-Wstrict-overflow"/>
@@ -277,7 +274,6 @@
 								<listOptionValue builtIn="false" value="-Wfloat-equal"/>
 								<listOptionValue builtIn="false" value="-Wundef"/>
 								<listOptionValue builtIn="false" value="-Wcast-qual"/>
-								<listOptionValue builtIn="false" value="-Wshadow"/>
 								<listOptionValue builtIn="false" value="-Wuninitialized"/>
 								<listOptionValue builtIn="false" value="-Wshift-overflow"/>
 								<listOptionValue builtIn="false" value="-Wstrict-overflow"/>
@@ -390,7 +386,6 @@
 									<listOptionValue builtIn="false" value="-Wfloat-equal"/>
 									<listOptionValue builtIn="false" value="-Wundef"/>
 									<listOptionValue builtIn="false" value="-Wcast-qual"/>
-									<listOptionValue builtIn="false" value="-Wshadow"/>
 									<listOptionValue builtIn="false" value="-Wuninitialized"/>
 									<listOptionValue builtIn="false" value="-Wshift-overflow"/>
 									<listOptionValue builtIn="false" value="-Wstrict-overflow"/>
@@ -512,7 +507,6 @@
 								<listOptionValue builtIn="false" value="-Wfloat-equal"/>
 								<listOptionValue builtIn="false" value="-Wundef"/>
 								<listOptionValue builtIn="false" value="-Wcast-qual"/>
-								<listOptionValue builtIn="false" value="-Wshadow"/>
 								<listOptionValue builtIn="false" value="-Wuninitialized"/>
 								<listOptionValue builtIn="false" value="-Wshift-overflow"/>
 								<listOptionValue builtIn="false" value="-Wstrict-overflow"/>

@@ -461,6 +461,20 @@ typedef enum
     BMS_OTP_ERROR
 } bms_otp_status_t;
 
+typedef enum
+{
+    BMS_STATE_INACTIVE = 0,
+    BMS_STATE_ACTIVE,
+    BMS_STATE_SLEEP,
+    BMS_STATE_FAULT,
+    BMS_STATE_UNSPECIFIED
+} bms_state_t;
+
+typedef enum
+{
+    BMS_CMD_NONE = 0
+} bms_command_t;
+
 /* Exported constants and defines --------------------------------------------*/
 
 
@@ -496,8 +510,6 @@ uint16_t get_smallest_cell_voltage(void);
 uint16_t BQ769x2_ReadVoltage(uint8_t command);
 
 float BQ769x2_ReadTemperature(uint8_t command);
-
-unsigned char Checksum(unsigned char *ptr, unsigned char len);
 
 bms_otp_status_t bms_otp_check(void);
 
