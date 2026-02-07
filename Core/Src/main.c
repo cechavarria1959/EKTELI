@@ -130,9 +130,9 @@ osSemaphoreId_t         semaphore_1Handle;
 const osSemaphoreAttr_t semaphore_1_attributes = {
     .name = "semaphore_1"};
 /* USER CODE BEGIN PV */
-uint16_t AlarmBits       = 0x00;
-float    Temperature[3]  = {0.0f};
-uint16_t Pack_Current    = 0x00;
+uint16_t AlarmBits      = 0x00;
+float    Temperature[3] = {0.0f};
+uint16_t Pack_Current   = 0x00;
 
 uint8_t rxdata[4];
 uint8_t RX_32Byte[32] = {0x00};
@@ -143,7 +143,7 @@ extern uint8_t OT_Fault;    // over-temperature fault state
 extern uint8_t OC_Fault;    // over-current fault state
 extern uint8_t PF_Fault;    // permanent-fault state
 
-extern uint8_t ProtectionsTriggered;    // Set to 1 if any protection triggers
+extern uint8_t ProtectionsTriggered;       // Set to 1 if any protection triggers
 extern uint8_t PermanentFaultTriggered;    // Set to 1 if any permanent fault triggers
 
 extern uint8_t DSG;    // discharge FET state

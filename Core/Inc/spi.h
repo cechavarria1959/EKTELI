@@ -1,7 +1,7 @@
 /**
  * @file    spi.h
- * @brief   
- * @details 
+ * @brief
+ * @details
  *
  * @author  CesarO
  * @date    2026-02-07

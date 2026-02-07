@@ -9,11 +9,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 #include <stdint.h>
-#include "bms.h"
-#include "stm32l4xx_hal.h"
-#include "spi.h"
-#include "main.h"
 #include <string.h>
+#include "bms.h"
+#include "main.h"
+#include "spi.h"
+#include "stm32l4xx_hal.h"
 
 
 /* Private macros ------------------------------------------------------------*/
@@ -23,7 +23,7 @@
 
 #define EMPTY_BUFFER ("\0\0\0\0")
 
-#define SPI_BMS_REG12_CONFIG  (0xDF)
+#define SPI_BMS_REG12_CONFIG (0xDF)
 
 
 /* Private typedef -----------------------------------------------------------*/
@@ -37,15 +37,15 @@ extern uint8_t RX_32Byte[32];
 /* Private (static) variables ------------------------------------------------*/
 uint16_t CellVoltage[16] = {0};
 
-uint8_t value_PFStatusA;        // Permanent Fail Status Register A
-uint8_t value_PFStatusB;        // Permanent Fail Status Register B
-uint8_t value_PFStatusC;        // Permanent Fail Status Register C
+uint8_t value_PFStatusA;    // Permanent Fail Status Register A
+uint8_t value_PFStatusB;    // Permanent Fail Status Register B
+uint8_t value_PFStatusC;    // Permanent Fail Status Register C
 
 uint8_t value_SafetyStatusA;    // Safety Status Register A
 uint8_t value_SafetyStatusB;    // Safety Status Register B
 uint8_t value_SafetyStatusC;    // Safety Status Register C
 
-uint8_t FET_Status;             // FET Status register contents  - Shows states of FETs
+uint8_t FET_Status;    // FET Status register contents  - Shows states of FETs
 
 uint8_t UV_Fault = 0;    // under-voltage fault state
 uint8_t OV_Fault = 0;    // over-voltage fault state
@@ -607,7 +607,7 @@ uint8_t get_charging_status(void)
     return charging_status;
 }
 
-#if 0 //taking out until refactoring
+#if 0    // taking out until refactoring
 /**
  * @brief Reset or shutdown BMS monitor
  * @details During normal operation, the RST_SHUT pin should be driven low.
@@ -732,7 +732,7 @@ void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
         delayUS(2000);
     }
 }
-#endif //taking out until refactoring
+#endif    // taking out until refactoring
 
 
 /* Private user code ---------------------------------------------------------*/
