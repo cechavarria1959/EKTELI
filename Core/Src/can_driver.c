@@ -1,10 +1,3 @@
-/*
- * can_driver.c
- *
- *  Created on: Nov 13, 2025
- *      Author: CesarO
- */
-
 /**
  * @file    can_driver.c
  * @brief   CAN driver implementation.

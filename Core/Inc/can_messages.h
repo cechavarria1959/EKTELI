@@ -1,10 +1,3 @@
-/*
- * can_messages.h
- *
- *  Created on: Nov 13, 2025
- *      Author: CesarO
- */
-
 /**
  * @file    can_messages.h
  * @brief   CAN message definitions for BMS.

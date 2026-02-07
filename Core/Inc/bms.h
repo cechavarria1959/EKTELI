@@ -1,10 +1,3 @@
-/*
- * bms.h
- *
- *  Created on: Oct 7, 2025
- *      Author: CesarO
- */
-
 /**
  * @file    bms.h
  * @brief

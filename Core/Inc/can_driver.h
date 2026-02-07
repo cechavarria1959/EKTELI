@@ -1,10 +1,3 @@
-/*
- * can_driver.h
- *
- *  Created on: Nov 13, 2025
- *      Author: CesarO
- */
-
 /**
  * @file    can_driver.h
  * @brief   CAN driver for BMS.
