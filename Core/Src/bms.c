@@ -64,21 +64,7 @@ unsigned char Checksum(unsigned char *ptr, unsigned char len);
 
 
 /* Public user code ----------------------------------------------------------*/
-/**
- * The device will automatically wake the internal oscillator at a falling edge
- * of SPI_CS, but it may take up to 50 µs to stabilize and be available for use
- * to the SPI interface logic.
- *
- * It is recommended to limit the frequency of SPI transactions by providing
- * 50 μs or more from the end of one transaction to the start of a new transaction.
- *
- * The first byte of a SPI transaction consists of an R/W bit (R = 0, W = 1),
- * followed by a 7-bit address, MSB first. If the controller (host) is writing,
- * then the second byte is the data written. If the controller is reading, then
- * the second byte sent on SPI_MOSI is ignored (except for CRC calculation).
- *
- * reg0 must be enabled and also set the voltages for reg1 and reg2
- **/
+
 void bms_init()
 {
     CommandSubcommands(ADDR_SET_CFGUPDATE);
@@ -153,13 +139,11 @@ void bms_init()
     // Set UTD at -20degC
     // BQ769x2_SetRegister(UTD_THRESHOLD, 0xEC, 1); // Disabled for further data format correctness
 
-    // Exit CONFIGUPDATE mode  - Subcommand 0x0092
     CommandSubcommands(ADDR_EXIT_CFGUPDATE);
 }
 
 void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
-// See the TRM or the BQ76952 header file for a full list of Direct Commands
-{    // type: R = read, W = write
+{
     uint8_t TX_data[2] = {0x00};
 
     // little endian format
@@ -167,22 +151,20 @@ void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
     TX_data[1] = (data >> 8) & 0xff;
 
     if (type == R)
-    {                                       // Read
+    {   //WARNING: is this ok?
         SPI_ReadReg(command, rxdata, 2, rxdata);    // RX_data is a global variable
         HAL_Delay(2);
     }
     if (type == W)
-    {    // write
-        // Control_status, alarm_status, alarm_enable all 2 bytes long
-        SPI_WriteReg(command, TX_data, 2, rxdata);    // rxdata is a global variable but not used in this case
+    {
+        SPI_WriteReg(command, TX_data, 2, rxdata);
         HAL_Delay(2);
     }
 }
 
 void CommandSubcommands(uint16_t command)    // For Command only Subcommands
-// See the TRM or the BQ76952 header file for a full list of Command-only subcommands
-{    // For DEEPSLEEP/SHUTDOWN subcommand you will need to call this function twice consecutively
-
+{
+    // For DEEPSLEEP/SHUTDOWN subcommand you will need to call this function twice consecutively
     uint8_t TX_Reg[2] = {0x00, 0x00};
 
     // TX_Reg in little endian format
@@ -194,26 +176,24 @@ void CommandSubcommands(uint16_t command)    // For Command only Subcommands
 }
 
 void Subcommands(uint16_t command, uint16_t data, uint8_t type)
-// See the TRM or the BQ76952 header file for a full list of Subcommands
 {
     // security keys and Manu_data writes dont work with this function (reading these commands works)
     // max readback size is 32 bytes i.e. DASTATUS, CUV/COV snapshot
-    uint8_t TX_Reg[4]    = {0x00, 0x00, 0x00, 0x00};
-    uint8_t TX_Buffer[2] = {0x00, 0x00};
+    uint8_t TX_Reg[4]    = {0};
+    uint8_t TX_Buffer[2] = {0};
 
     // TX_Reg in little endian format
     TX_Reg[0] = command & 0xff;
     TX_Reg[1] = (command >> 8) & 0xff;
 
     if (type == R)
-    {    // read
+    {
         SPI_WriteReg(0x3E, TX_Reg, 2, rxdata);
         HAL_Delay(2);
-        SPI_ReadReg(0x40, RX_32Byte, 32, rxdata);    // RX_32Byte is a global variable
+        SPI_ReadReg(0x40, RX_32Byte, 32, rxdata);
     }
     else if (type == W)
     {
-        // FET_Control, REG12_Control
         TX_Reg[2] = data & 0xff;
         SPI_WriteReg(0x3E, TX_Reg, 3, rxdata);
         HAL_Delay(1);
@@ -223,14 +203,13 @@ void Subcommands(uint16_t command, uint16_t data, uint8_t type)
         HAL_Delay(1);
     }
     else if (type == W2)
-    {    // write data with 2 bytes
-        // CB_Active_Cells, CB_SET_LVL
+    {
         TX_Reg[2] = data & 0xff;
         TX_Reg[3] = (data >> 8) & 0xff;
         SPI_WriteReg(0x3E, TX_Reg, 4, rxdata);
         HAL_Delay(1);
         TX_Buffer[0] = Checksum(TX_Reg, 4);
-        TX_Buffer[1] = 0x06;    // combined length of registers address and data
+        TX_Buffer[1] = 0x06;
         SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);
         HAL_Delay(1);
     }
@@ -238,44 +217,44 @@ void Subcommands(uint16_t command, uint16_t data, uint8_t type)
 
 void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
 {
-    uint8_t TX_Buffer[2]  = {0x00, 0x00};
-    uint8_t TX_RegData[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    uint8_t TX_Buffer[2]  = {0};
+    uint8_t TX_RegData[6] = {0};
 
     // TX_RegData in little endian format
     TX_RegData[0] = reg_addr & 0xff;
     TX_RegData[1] = (reg_addr >> 8) & 0xff;
-    TX_RegData[2] = reg_data & 0xff;    // 1st byte of data
+    TX_RegData[2] = reg_data & 0xff;
 
     switch (datalen)
     {
-        case 1:    // 1 byte datalength
+        case 1:
             SPI_WriteReg(0x3E, TX_RegData, 3, rxdata);
             HAL_Delay(2);
             TX_Buffer[0] = Checksum(TX_RegData, 3);
-            TX_Buffer[1] = 0x05;                 // combined length of register address and data
-            SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);    // Write the checksum and length
+            TX_Buffer[1] = 0x05; 
+            SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);
             HAL_Delay(2);
             break;
 
-        case 2:    // 2 byte datalength
+        case 2:
             TX_RegData[3] = (reg_data >> 8) & 0xff;
             SPI_WriteReg(0x3E, TX_RegData, 4, rxdata);
             HAL_Delay(2);
             TX_Buffer[0] = Checksum(TX_RegData, 4);
-            TX_Buffer[1] = 0x06;                 // combined length of register address and data
-            SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);    // Write the checksum and length
+            TX_Buffer[1] = 0x06; 
+            SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);
             HAL_Delay(2);
             break;
 
-        case 4:    // 4 byte datalength, Only used for CCGain and Capacity Gain
+        case 4:    // Only used for CCGain and Capacity Gain
             TX_RegData[3] = (reg_data >> 8) & 0xff;
             TX_RegData[4] = (reg_data >> 16) & 0xff;
             TX_RegData[5] = (reg_data >> 24) & 0xff;
             SPI_WriteReg(0x3E, TX_RegData, 6, rxdata);
             HAL_Delay(2);
             TX_Buffer[0] = Checksum(TX_RegData, 6);
-            TX_Buffer[1] = 0x08;                 // combined length of register address and data
-            SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);    // Write the checksum and length
+            TX_Buffer[1] = 0x08; 
+            SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);
             HAL_Delay(2);
             break;
 
@@ -286,12 +265,11 @@ void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
 }
 
 uint16_t BQ769x2_ReadVoltage(uint8_t command)
-// This function can be used to read a specific cell voltage or stack / pack / LD voltage
 {
-    // RX_data is global var
     DirectCommands(command, 0x00, R);
 
-    if (command >= ADDR_CELL_VOLTAGES && command <= (ADDR_CELL_VOLTAGES + (15 * 2)))    // Cells 1 through 16 (0x14 to 0x32)
+    // Cells 1 through 16 (0x14 to 0x32)
+    if (command >= ADDR_CELL_VOLTAGES && command <= (ADDR_CELL_VOLTAGES + (15 * 2)))
     {
         return (rxdata[1] * 256 + rxdata[0]);    // voltage is reported in mV
     }
@@ -307,14 +285,13 @@ void BQ769x2_Readcell_voltages(void)
 {
     int cellvoltageholder = ADDR_CELL_VOLTAGES;    // Cell1Voltage is 0x14
     for (int x = 0; x < 16; x++)
-    {    // Reads all cell voltages
+    {
         CellVoltage[x] = BQ769x2_ReadVoltage(cellvoltageholder);
         cellvoltageholder += 2;
     }
 }
 
 int16_t BQ769x2_ReadCurrent()
-// Reads PACK current
 {
     DirectCommands(0x3A, 0x00, R);
     return (rxdata[1] * 256 + rxdata[0]);    // current is reported in mA
@@ -323,22 +300,24 @@ int16_t BQ769x2_ReadCurrent()
 float BQ769x2_ReadTemperature(uint8_t command)
 {
     DirectCommands(command, 0x00, R);
-    // RX_data is a global var
+
     return (0.1 * (float)(rxdata[1] * 256 + rxdata[0])) - 273.15;    // converts from 0.1K to Celcius
 }
 
 void BQ769x2_ReadSafetyStatus()
-{    // good example functions
+{
     // Read Safety Status A/B/C and find which bits are set
     // This shows which primary protections have been triggered
     DirectCommands(ADDR_SAFETY_STATUS_A, 0x00, R);
     value_SafetyStatusA = (rxdata[1] * 256 + rxdata[0]);
-    // Example Fault Flags
+
     OV_Fault = ((0x8 & rxdata[0]) >> 3);
     UV_Fault = ((0x4 & rxdata[0]) >> 2);
     // SCD_Fault = ((0x8 & rxdata[1])>>3);
     // OCD_Fault = ((0x2 & rxdata[1])>>1);
-    if ((rxdata[0] & 0xF0) != 0)    // check if any over-current bits are set
+
+    // check if any over-current bits are set
+    if ((rxdata[0] & 0xF0) != 0)
     {
         OC_Fault = 1;
     }
@@ -349,7 +328,9 @@ void BQ769x2_ReadSafetyStatus()
 
     DirectCommands(ADDR_SAFETY_STATUS_B, 0x00, R);
     value_SafetyStatusB = (rxdata[1] * 256 + rxdata[0]);
-    if ((rxdata[0] & 0xF0) != 0)    // check if any over-temperature bits are set
+
+    // check if any over-temperature bits are set
+    if ((rxdata[0] & 0xF0) != 0)
     {
         OT_Fault = 1;
     }
@@ -406,8 +387,8 @@ void BQ769x2_ReadFETStatus()
     DirectCommands(ADDR_FET_STATUS, 0x00, R);
     FET_Status = (rxdata[1] * 256 + rxdata[0]);
 
-    DSG = ((0x4 & rxdata[0]) >> 2);    // discharge FET state
-    CHG = (0x1 & rxdata[0]);           // charge FET state
+    DSG = ((0x4 & rxdata[0]) >> 2);
+    CHG = (0x1 & rxdata[0]);
 }
 
 /* mainly checks REG2 Status for MCU power rail, which is off for
@@ -633,12 +614,14 @@ uint8_t get_fet_status(void)
 
 /**
  * @brief Disable discharge FETs
+ * 
  * @details The DCHG pin is used to control the external discharge FETs.
  * assert the DFETOFF pin to keep the FETs off. As long as the pin is asserted,
  * the FETs are blocked from being reenabled. When the pin is deasserted,
  * the BQ76952 will reenable the FETs if nothing is blocking them being
  * reenabled (such as fault conditions still present, or the CFETOFF or
  * DFETOFF pins are asserted).
+ * 
  * @note The DFETOFF or BOTHOFF functionality disables both the DSG FET and
  * the PDSG FET when asserted.
  */
@@ -648,6 +631,7 @@ void bms_dfet_off(void)
 
 /**
  * @brief Reset or shutdown BMS monitor
+ * 
  * @details During normal operation, the RST_SHUT pin should be driven low.
  * When the pin is driven high, the BMS will immediately reset most of the
  * digital logic, including that associated with the serial communications bus.
@@ -665,7 +649,7 @@ void bms_reset_shutdown(void)
 
 /* Private user code ---------------------------------------------------------*/
 unsigned char Checksum(unsigned char *ptr, unsigned char len)
-// Calculates the checksum when writing to a RAM register. The checksum is the inverse of the sum of the bytes.
+// The checksum is the inverse of the sum of the bytes.
 {
     unsigned char i;
     unsigned char checksum = 0;

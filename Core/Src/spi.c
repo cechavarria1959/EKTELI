@@ -43,11 +43,18 @@ unsigned char CRC8(unsigned char *ptr, unsigned char len);
 
 
 /* Public user code ----------------------------------------------------------*/
+/**
+ * @brief Writes data to a register over SPI with retries and CRC8 checking.
+ *
+ * @param reg_addr  The starting register address to write to.
+ * @param reg_data  Pointer to the data buffer containing bytes to write.
+ * @param count     Number of bytes to write.
+ * @param rxdata    Pointer to a buffer to store received SPI data (4 bytes).
+ */
 void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxdata[4])
 {
-    // SPI Write. Includes retries in case HFO has not started or if wait time is needed. See BQ76952 Software Development Guide for examples
     uint8_t      addr;
-    uint8_t      TX_Buffer[MAX_BUFFER_SIZE] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    uint8_t      TX_Buffer[MAX_BUFFER_SIZE] = {0x00};
     unsigned int i;
     unsigned int match;
     unsigned int retries = 10;
@@ -82,11 +89,18 @@ void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rx
     }
 }
 
+/**
+ * @brief Reads data from a register over SPI with retries and CRC8 checking.
+ *
+ * @param reg_addr  The starting register address to read from.
+ * @param reg_data  Pointer to the buffer where read data will be stored.
+ * @param count     Number of bytes to read.
+ * @param rxdata    Pointer to a buffer to store received SPI data (=4 bytes).
+ */
 void SPI_ReadReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxdata[4])
 {
-    // SPI Read. Includes retries in case HFO has not started or if wait time is needed. See BQ76952 Software Development Guide for examples
     uint8_t      addr;
-    uint8_t      TX_Buffer[MAX_BUFFER_SIZE] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    uint8_t      TX_Buffer[MAX_BUFFER_SIZE] = {0x00};
     unsigned int i;
     unsigned int match;
     unsigned int retries = 10;
@@ -124,8 +138,14 @@ void SPI_ReadReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxd
 }
 
 /* Private user code ---------------------------------------------------------*/
+/**
+ * @brief Calculates CRC8 for a given data buffer.
+ *
+ * @param ptr   Pointer to the data buffer.
+ * @param len   Length of the data buffer in bytes.
+ * @return      The calculated CRC8 value.
+ */
 unsigned char CRC8(unsigned char *ptr, unsigned char len)
-// Calculates CRC8 for passed bytes. Used in i2c read and write functions
 {
     unsigned char i;
     unsigned char crc = 0;
