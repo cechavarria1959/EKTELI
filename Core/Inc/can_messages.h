@@ -1,7 +1,9 @@
 /**
  * @file    can_messages.h
- * @brief   CAN message definitions for BMS.
- * @details
+ * @brief   Defines CAN message IDs and bitfields for BMS firmware.
+ * @details This header provides CAN message identifiers for BMS outgoing,
+ *          incoming, and OTA communication. It also defines protection
+ *          bitfields used for safety and operational status reporting.
  *
  * @author  CesarO
  * @date    2025-11-13

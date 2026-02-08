@@ -1,7 +1,10 @@
 /**
  * @file    spi.c
- * @brief
- * @details
+ * @brief   SPI communication routines for register access with CRC8 checking.
+ * @details Provides functions to read and write registers over SPI, including
+ *          retry mechanisms and CRC8 validation for robust communication.
+ *          Implements CRC8 calculation for data integrity. Designed for use
+ *          with STM32 HAL and custom BMS firmware.
  *
  * @author  CesarO
  * @date    2026-02-07

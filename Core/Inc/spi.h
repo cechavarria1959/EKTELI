@@ -1,7 +1,9 @@
 /**
  * @file    spi.h
- * @brief
- * @details
+ * @brief   SPI interface header for register read/write operations.
+ * @details Provides function prototypes for reading and writing registers
+ *          via SPI. Supports multi-byte operations and returns received
+ *          data through provided buffers.
  *
  * @author  CesarO
  * @date    2026-02-07

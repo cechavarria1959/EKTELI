@@ -141,6 +141,20 @@ void        bms_main_task(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/**
+ * @brief Transmits the firmware version and CRC value over CAN bus.
+ *
+ * This function prepares a 6-byte buffer containing the firmware version
+ * (2 bytes) and the 32-bit CRC value (4 bytes) calculated from the flash
+ * memory region starting at APPLICATION_ADDRESS. The buffer is then sent
+ * via CAN using the specified CAN message ID.
+ *
+ * Buffer layout:
+ *   buffer[0-1]: Firmware version (big-endian)
+ *   buffer[2-5]: CRC value (big-endian)
+ *
+ * @note The CRC is computed using HAL_CRC_Calculate with FLASH_LENGTH.
+ */
 void transmit_fw_version(void)
 {
     uint8_t buffer[6];

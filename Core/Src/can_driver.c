@@ -1,7 +1,8 @@
 /**
  * @file    can_driver.c
  * @brief   CAN driver implementation.
- * @details
+ * @details Provides functions for CAN message transmission, reception,
+ *          and command decoding for battery management system.
  *
  * @author  CesarO
  * @date    2025-11-13
@@ -45,6 +46,19 @@ HAL_StatusTypeDef can_msg_ack(uint32_t can_id, uint32_t timeout);
 
 
 /* Public user code ----------------------------------------------------------*/
+/**
+ * @brief Transmits battery status over CAN bus.
+ *
+ * This function sends battery status information including state of charge
+ * (SOC), state of health (SOH), voltage, current, and average temperature
+ * using a CAN message with a predefined battery status CAN ID.
+ *
+ * @param soc      State of Charge (percentage, 0-100).
+ * @param soh      State of Health (percentage, 0-100).
+ * @param voltage  Battery voltage in millivolts.
+ * @param current  Battery current in milliamps (signed).
+ * @param temp_avg Average battery temperature in degrees Celsius (signed).
+ */
 void can_transmit_status(uint8_t soc, uint8_t soh, uint16_t voltage, int16_t current, int8_t temp_avg)
 {
     CAN_TxHeaderTypeDef tx_header;
@@ -69,6 +83,20 @@ void can_transmit_status(uint8_t soc, uint8_t soh, uint16_t voltage, int16_t cur
     HAL_CAN_AddTxMessage(&hcan1, &tx_header, data, &mailbox);
 }
 
+/**
+ * @brief Transmits arbitrary CAN message with timeout.
+ *
+ * Sends a CAN message with the specified CAN ID and data payload. Handles
+ * splitting the data into multiple CAN frames if the payload exceeds 8 bytes.
+ * Waits for a free transmit mailbox and supports timeout for transmission.
+ *
+ * @param can_id   Standard CAN identifier for the message.
+ * @param pdata    Pointer to data buffer to transmit.
+ * @param length   Length of data buffer in bytes.
+ * @param timeout  Timeout duration in milliseconds. Use HAL_MAX_DELAY for
+ *                 infinite wait.
+ * @return HAL_OK on success, HAL_TIMEOUT if transmission timed out.
+ */
 HAL_StatusTypeDef can_msg_transmit(uint32_t can_id, uint8_t *pdata, uint32_t length, uint32_t timeout)
 {
     CAN_TxHeaderTypeDef tx_header;
@@ -195,6 +223,19 @@ void can_decode_cmd(can_message_t *msg)
     }
 }
 
+/**
+ * @brief Sends a CAN message acknowledgment with the specified CAN ID.
+ *
+ * This function waits until a CAN transmit mailbox is available, then sends
+ * an empty CAN message (DLC = 0) with the given standard CAN ID. If the
+ * mailbox is not available within the specified timeout, the function returns
+ * HAL_TIMEOUT.
+ *
+ * @param can_id   Standard CAN identifier to use for the acknowledgment.
+ * @param timeout  Timeout duration in milliseconds. Use HAL_MAX_DELAY for
+ *                 indefinite wait.
+ * @return HAL_OK on success, HAL_TIMEOUT if transmission timed out.
+ */
 HAL_StatusTypeDef can_msg_ack(uint32_t can_id, uint32_t timeout)
 {
     CAN_TxHeaderTypeDef tx_header;
@@ -228,6 +269,12 @@ HAL_StatusTypeDef can_msg_ack(uint32_t can_id, uint32_t timeout)
 
 
 /* Private user code ---------------------------------------------------------*/
+/**
+ * @brief CAN RX FIFO 0 message pending callback.
+ * 
+ * @param  hcan pointer to a CAN_HandleTypeDef structure that contains
+ *         the configuration information for the specified CAN.
+ */
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
     can_message_t msg;

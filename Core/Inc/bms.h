@@ -1,7 +1,11 @@
 /**
  * @file    bms.h
- * @brief
- * @details
+ * @brief   Battery Management System (BMS) interface definitions.
+ * @details Contains enums, constants, and function prototypes for
+ *          communication and control of the BQ769x2 battery management
+ *          IC. Provides register addresses, command timings, and status
+ *          types used throughout the firmware for battery monitoring,
+ *          protection, and balancing operations.
  *
  * @author  CesarO
  * @date    2025-10-07

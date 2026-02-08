@@ -1,7 +1,9 @@
 /**
  * @file    can_driver.h
- * @brief   CAN driver for BMS.
- * @details
+ * @brief   CAN driver interface for Battery Management System (BMS).
+ * @details Provides CAN message structures, constants, and function
+ *          prototypes for transmitting and decoding BMS status and
+ *          commands over CAN bus.
  *
  * @author  CesarO
  * @date    2025-11-13

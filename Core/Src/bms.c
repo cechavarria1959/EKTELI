@@ -1,7 +1,9 @@
 /**
  * @file    bms.c
- * @brief
- * @details
+ * @brief   Battery Management System (BMS) driver
+ * @details This file contains the implementation of the BMS driver functions,
+ *          including initialization, configuration, and data retrieval from the
+ *          BQ76952 battery monitor IC.
  *
  * @author  CesarO
  * @date    2025-10-08
@@ -64,7 +66,34 @@ unsigned char Checksum(unsigned char *ptr, unsigned char len);
 
 
 /* Public user code ----------------------------------------------------------*/
-
+/**
+ * @brief Initializes the BMS (Battery Management System) configuration
+ *        registers.
+ *
+ * This function configures the BQ769x2 battery monitor IC by setting up
+ * various registers to define protection thresholds, pin configurations,
+ * cell balancing, and other operational parameters. The configuration
+ * includes enabling protections for over-current, over-voltage,
+ * under-voltage, temperature limits, and setting up the cell count and
+ * pin behaviors.
+ *
+ * Register configurations performed:
+ * - Enters configuration update mode.
+ * - Sets power configuration for best performance.
+ * - Configures DFETOFF, ALERT, TS1, TS3, DCHG, and DDSG pins.
+ * - Enables 10-cell operation (for 10S battery packs).
+ * - Enables various protection features (short-circuit, over-current,
+ *   over/under-voltage, temperature).
+ * - Configures cell balancing in Relax and Charge modes.
+ * - Sets thresholds for cell under-voltage (CUV), over-voltage (COV),
+ *   over-current in charge/discharge (OCC/OCD1), and short-circuit (SCD).
+ * - Sets delays and latch limits for short-circuit protection.
+ * - Sets temperature thresholds for over-temperature in charge (OTC)
+ *   and recovery.
+ * - Optionally sets under-temperature in discharge (UTD) threshold
+ *   (currently disabled).
+ * - Exits configuration update mode.
+ */
 void bms_init()
 {
     CommandSubcommands(ADDR_SET_CFGUPDATE);
@@ -142,6 +171,18 @@ void bms_init()
     CommandSubcommands(ADDR_EXIT_CFGUPDATE);
 }
 
+/**
+ * @brief Executes a direct command via SPI interface.
+ *
+ * This function sends a direct command with optional data to the device
+ * using the SPI interface. The data is sent in little endian format.
+ * Depending on the 'type' parameter, the function will either read from
+ * or write to the device.
+ *
+ * @param command The command byte to send.
+ * @param data    The 16-bit data to send.
+ * @param type    Operation type: R for read, W for write.
+ */
 void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
 {
     uint8_t TX_data[2] = {0x00};
@@ -162,12 +203,21 @@ void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
     }
 }
 
-void CommandSubcommands(uint16_t command)    // For Command only Subcommands
+/**
+ * @brief Sends a subcommand using the Command register.
+ *
+ * This function sends a subcommand to the device using the Command
+ * register (0x3E).
+ * 
+ * Note: For certain subcommands like DEEPSLEEP or SHUTDOWN,
+ * this function must be called twice consecutively.
+ *
+ * @param command The 16-bit subcommand to send.
+ */
+void CommandSubcommands(uint16_t command)
 {
-    // For DEEPSLEEP/SHUTDOWN subcommand you will need to call this function twice consecutively
     uint8_t TX_Reg[2] = {0x00, 0x00};
 
-    // TX_Reg in little endian format
     TX_Reg[0] = command & 0xff;
     TX_Reg[1] = (command >> 8) & 0xff;
 
@@ -175,14 +225,27 @@ void CommandSubcommands(uint16_t command)    // For Command only Subcommands
     HAL_Delay(2);
 }
 
+/**
+ * @brief Executes a subcommand with optional data via SPI.
+ *
+ * This function sends a subcommand with optional data to the device
+ * using the SPI interface. It supports read and write operations,
+ * including writing 1 or 2 bytes of data. The function handles
+ * checksum calculation and formatting of the data in little endian.
+ * Note: Security keys and manufacturer data writes are not supported
+ * with this function (reading is supported). Maximum readback size is
+ * 32 bytes.
+ *
+ * @param command The 16-bit subcommand to send.
+ * @param data    The 16-bit data to send.
+ * @param type    Operation type: R for read, W for write (1 byte),
+ *                W2 for write (2 bytes).
+ */
 void Subcommands(uint16_t command, uint16_t data, uint8_t type)
 {
-    // security keys and Manu_data writes dont work with this function (reading these commands works)
-    // max readback size is 32 bytes i.e. DASTATUS, CUV/COV snapshot
     uint8_t TX_Reg[4]    = {0};
     uint8_t TX_Buffer[2] = {0};
 
-    // TX_Reg in little endian format
     TX_Reg[0] = command & 0xff;
     TX_Reg[1] = (command >> 8) & 0xff;
 
@@ -215,12 +278,25 @@ void Subcommands(uint16_t command, uint16_t data, uint8_t type)
     }
 }
 
+/**
+ * @brief Writes data to a BQ769x2 register via SPI interface.
+ *
+ * This function sets a register in the BQ769x2 battery management system
+ * by sending the register address and data in little endian format. The
+ * function supports writing 1, 2, or 4 bytes of data, and handles the
+ * required checksum and command sequence for each case.
+ *
+ * @param reg_addr 16-bit register address to write to.
+ * @param reg_data 32-bit data to write to the register.
+ * @param datalen  Number of bytes to write (1, 2, or 4).
+ *
+ * @note For datalen = 4, only used for CCGain and Capacity Gain registers.
+ */
 void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
 {
     uint8_t TX_Buffer[2]  = {0};
     uint8_t TX_RegData[6] = {0};
 
-    // TX_RegData in little endian format
     TX_RegData[0] = reg_addr & 0xff;
     TX_RegData[1] = (reg_addr >> 8) & 0xff;
     TX_RegData[2] = reg_data & 0xff;
@@ -246,7 +322,7 @@ void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
             HAL_Delay(2);
             break;
 
-        case 4:    // Only used for CCGain and Capacity Gain
+        case 4:
             TX_RegData[3] = (reg_data >> 8) & 0xff;
             TX_RegData[4] = (reg_data >> 16) & 0xff;
             TX_RegData[5] = (reg_data >> 24) & 0xff;
@@ -264,6 +340,12 @@ void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
     }
 }
 
+/**
+ * @brief Reads voltage from BQ769x2 device for a given command address.
+ *
+ * @param command Command address to read voltage from.
+ * @return uint16_t Voltage value in mV or centivolts, depending on address.
+ */
 uint16_t BQ769x2_ReadVoltage(uint8_t command)
 {
     DirectCommands(command, 0x00, R);
@@ -281,6 +363,12 @@ uint16_t BQ769x2_ReadVoltage(uint8_t command)
     }
 }
 
+/**
+ * @brief Reads voltages of all 16 cells from BQ769x2 and stores them.
+ *
+ * Iterates through the cell voltage addresses and stores each cell's voltage
+ * in the CellVoltage array.
+ */
 void BQ769x2_Readcell_voltages(void)
 {
     int cellvoltageholder = ADDR_CELL_VOLTAGES;    // Cell1Voltage is 0x14
@@ -291,12 +379,28 @@ void BQ769x2_Readcell_voltages(void)
     }
 }
 
+/**
+ * @brief Reads current value from BQ769x2 device.
+ *
+ * Reads the current measurement from the device and returns it in milliamps
+ * (mA).
+ *
+ * @return int16_t Current value in mA.
+ */
 int16_t BQ769x2_ReadCurrent()
 {
     DirectCommands(0x3A, 0x00, R);
     return (rxdata[1] * 256 + rxdata[0]);    // current is reported in mA
 }
 
+/**
+ * @brief Reads temperature from BQ769x2 device for a given command address.
+ *
+ * Converts the raw temperature value from 0.1 Kelvin units to Celsius.
+ *
+ * @param command Command address to read temperature from.
+ * @return float Temperature in degrees Celsius.
+ */
 float BQ769x2_ReadTemperature(uint8_t command)
 {
     DirectCommands(command, 0x00, R);
@@ -304,10 +408,17 @@ float BQ769x2_ReadTemperature(uint8_t command)
     return (0.1 * (float)(rxdata[1] * 256 + rxdata[0])) - 273.15;    // converts from 0.1K to Celcius
 }
 
+/**
+ * @brief Reads the Safety Status registers (A/B/C) from the BQ769x2 device.
+ *
+ * This function checks which primary protections have been triggered by reading
+ * the Safety Status A and B registers. It extracts Overvoltage (OV), 
+ * Undervoltage (UV), and Overcurrent (OC) fault bits. Overtemperature (OT) 
+ * faults are checked from Safety Status B. If any protection is triggered, 
+ * the ProtectionsTriggered flag is set.
+ */
 void BQ769x2_ReadSafetyStatus()
 {
-    // Read Safety Status A/B/C and find which bits are set
-    // This shows which primary protections have been triggered
     DirectCommands(ADDR_SAFETY_STATUS_A, 0x00, R);
     value_SafetyStatusA = (rxdata[1] * 256 + rxdata[0]);
 
@@ -353,10 +464,15 @@ void BQ769x2_ReadSafetyStatus()
     }
 }
 
+/**
+ * @brief Reads the Permanent Fail Status registers (A/B/C) from the BQ769x2.
+ *
+ * This function checks which permanent failures have been triggered by reading
+ * the Permanent Fail Status A, B, and C registers. If any permanent fault is 
+ * detected, the PermanentFaultTriggered flag is set.
+ */
 void BQ769x2_ReadPFStatus()
 {
-    // Read Permanent Fail Status A/B/C and find which bits are set
-    // This shows which permanent failures have been triggered
     DirectCommands(ADDR_PF_STATUS_A, 0x00, R);
     value_PFStatusA = (rxdata[1] * 256 + rxdata[0]);
     DirectCommands(ADDR_PF_STATUS_B, 0x00, R);
@@ -374,16 +490,25 @@ void BQ769x2_ReadPFStatus()
     }
 }
 
+/**
+ * @brief Reads the Alarm Status register from the BQ769x2 device.
+ *
+ * @return uint16_t Value of the Alarm Status register.
+ */
 uint16_t BQ769x2_ReadAlarmStatus()
 {
-    // Read this register to find out why the ALERT pin was asserted
     DirectCommands(ADDR_ALARM_STATUS, 0x00, R);
     return (rxdata[1] * 256 + rxdata[0]);
 }
 
+/**
+ * @brief Reads the FET Status register from the BQ769x2 device.
+ *
+ * This function checks which FETs (DSG and CHG) are enabled by reading the FET
+ * Status register and updates the corresponding status flags.
+ */
 void BQ769x2_ReadFETStatus()
 {
-    // Read FET Status to see which FETs are enabled
     DirectCommands(ADDR_FET_STATUS, 0x00, R);
     FET_Status = (rxdata[1] * 256 + rxdata[0]);
 
@@ -391,7 +516,10 @@ void BQ769x2_ReadFETStatus()
     CHG = (0x1 & rxdata[0]);
 }
 
-/* mainly checks REG2 Status for MCU power rail, which is off for
+/**
+ * @brief Checks REG2 status and OTP programming conditions for BQ7695203.
+ *
+ * mainly checks REG2 Status for MCU power rail, which is off for
  * BQ7695203 device as default.
  *
  * In order for OTP to work a voltage between 10 to 12 V should be applied
@@ -498,6 +626,13 @@ bms_otp_status_t bms_otp_check(void)
     return otp_status;
 }
 
+/**
+ * @brief Returns the smallest cell voltage from the CellVoltage array.
+ * 
+ * Iterates through all 16 cell voltages and finds the minimum value.
+ * 
+ * @return Smallest cell voltage (uint16_t).
+ */
 uint16_t get_smallest_cell_voltage()
 {
     uint16_t smallest_voltage = 0xFFFF;
@@ -512,6 +647,13 @@ uint16_t get_smallest_cell_voltage()
     return smallest_voltage;
 }
 
+/**
+ * @brief Returns the largest cell voltage from the CellVoltage array.
+ * 
+ * Iterates through all 16 cell voltages and finds the maximum value.
+ * 
+ * @return Largest cell voltage (uint16_t).
+ */
 uint16_t get_largest_cell_voltage()
 {
     uint16_t largest_voltage = 0x0000;
@@ -526,6 +668,14 @@ uint16_t get_largest_cell_voltage()
     return largest_voltage;
 }
 
+/**
+ * @brief Gets the BMS status.
+ * 
+ * Returns 3 if any protection or permanent fault is triggered, otherwise
+ * returns 1 for normal operation.
+ * 
+ * @return BMS status (uint8_t): 3 = Fault, 1 = Normal.
+ */
 uint8_t get_bms_status(void)
 {
     uint8_t rv = 0;
@@ -542,6 +692,13 @@ uint8_t get_bms_status(void)
     return rv;
 }
 
+/**
+ * @brief Gets the cell balancing status.
+ * 
+ * Checks if any cell balancing is active by reading balancing active cells.
+ * 
+ * @return Balancing status (uint8_t): 1 = Active, 0 = Inactive.
+ */
 uint8_t get_balancing_status(void)
 {
     uint8_t balancing_status = 0u;
@@ -561,6 +718,13 @@ uint8_t get_balancing_status(void)
     return balancing_status;
 }
 
+/**
+ * @brief Gets the charging status.
+ * 
+ * Determines charging status based on FETs and current or voltage readings.
+ * 
+ * @return Charging status (uint8_t): 1 = Charging, 0 = Not charging.
+ */
 uint8_t get_charging_status(void)
 {
     uint8_t charging_status = 0u;
@@ -595,6 +759,14 @@ uint8_t get_charging_status(void)
     return charging_status;
 }
 
+/**
+ * @brief Gets BMS faults.
+ * 
+ * Returns a bitfield representing various fault conditions if any protection
+ * or permanent fault is triggered.
+ * 
+ * @return Fault bitfield (uint8_t).
+ */
 uint8_t bms_get_faults(void)
 {
     uint8_t faults = 0;
@@ -607,6 +779,13 @@ uint8_t bms_get_faults(void)
     return faults;
 }
 
+/**
+ * @brief Gets the FET status.
+ * 
+ * Returns the status of CHG and DSG FETs as a bitfield.
+ * 
+ * @return FET status (uint8_t).
+ */
 uint8_t get_fet_status(void)
 {
     return (CHG << 1) | DSG;
@@ -648,6 +827,16 @@ void bms_reset_shutdown(void)
 
 
 /* Private user code ---------------------------------------------------------*/
+/**
+ * @brief Calculates the checksum for a given byte array.
+ *
+ * The checksum is computed as the bitwise inverse of the sum of all bytes
+ * in the input array.
+ *
+ * @param ptr Pointer to the byte array to be checked.
+ * @param len Number of bytes in the array.
+ * @return The calculated checksum as an unsigned char.
+ */
 unsigned char Checksum(unsigned char *ptr, unsigned char len)
 // The checksum is the inverse of the sum of the bytes.
 {
