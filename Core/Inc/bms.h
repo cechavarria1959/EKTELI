@@ -480,6 +480,18 @@ typedef enum
 } bms_command_t;
 
 /* Exported constants and defines --------------------------------------------*/
+/** @brief BMS Model Selection */
+#if defined(BMS_MODEL_10S)
+    #define BMS_CELL_COUNT            (10u)
+    #define BMS_CONSECUTIVE_CELLS     (9u)
+#elif defined(BMS_MODEL_14S)
+    #define BMS_CELL_COUNT            (14u)
+    #define BMS_CONSECUTIVE_CELLS     (13u)
+#else
+    #error "BMS model not defined. Define BMS_MODEL_10S or BMS_MODEL_14S"
+#endif
+
+#define BMS_LAST_CELL_INDEX       (15u)    /* Cell 16 address index (0-based) */
 
 
 /* Exported macros -----------------------------------------------------------*/

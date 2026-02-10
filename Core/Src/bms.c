@@ -364,19 +364,26 @@ uint16_t BQ769x2_ReadVoltage(uint8_t command)
 }
 
 /**
- * @brief Reads voltages of all 16 cells from BQ769x2 and stores them.
+ * @brief Reads cell voltages from BQ769x2 based on BMS model configuration.
  *
- * Iterates through the cell voltage addresses and stores each cell's voltage
- * in the CellVoltage array.
+ * For BMS_MODEL_10S: Reads cells 1-9 consecutively, cell 10 from address 16.
+ * For BMS_MODEL_14S: Reads cells 1-13 consecutively, cell 14 from address 16.
+ * The last cell is always read from the Cell 16 address due to BQ769x2 wiring.
  */
 void BQ769x2_Readcell_voltages(void)
 {
-    int cellvoltageholder = ADDR_CELL_VOLTAGES;    // Cell1Voltage is 0x14
-    for (int x = 0; x < 16; x++)
+    uint8_t cell_addr = ADDR_CELL_VOLTAGES;    /* Cell1Voltage is 0x14 */
+
+    /* Read consecutive cells (1 to N-1) */
+    for (uint8_t cell = 0; cell < BMS_CONSECUTIVE_CELLS; cell++)
     {
-        CellVoltage[x] = BQ769x2_ReadVoltage(cellvoltageholder);
-        cellvoltageholder += 2;
+        CellVoltage[cell] = BQ769x2_ReadVoltage(cell_addr);
+        cell_addr += 2;
     }
+
+    /* Read last cell from Cell 16 address */
+    cell_addr = ADDR_CELL_VOLTAGES + (BMS_LAST_CELL_INDEX * 2);
+    CellVoltage[BMS_CELL_COUNT - 1] = BQ769x2_ReadVoltage(cell_addr);
 }
 
 /**
@@ -628,19 +635,20 @@ bms_otp_status_t bms_otp_check(void)
 
 /**
  * @brief Returns the smallest cell voltage from the CellVoltage array.
- * 
- * Iterates through all 16 cell voltages and finds the minimum value.
- * 
+ *
+ * Iterates through all configured cells and finds the minimum value.
+ *
  * @return Smallest cell voltage (uint16_t).
  */
-uint16_t get_smallest_cell_voltage()
+uint16_t get_smallest_cell_voltage(void)
 {
     uint16_t smallest_voltage = 0xFFFF;
-    for (int i = 0; i < 16; i++)
+
+    for (uint8_t cell = 0; cell < BMS_CELL_COUNT; cell++)
     {
-        if (CellVoltage[i] < smallest_voltage)
+        if (CellVoltage[cell] < smallest_voltage)
         {
-            smallest_voltage = CellVoltage[i];
+            smallest_voltage = CellVoltage[cell];
         }
     }
 
@@ -649,19 +657,20 @@ uint16_t get_smallest_cell_voltage()
 
 /**
  * @brief Returns the largest cell voltage from the CellVoltage array.
- * 
- * Iterates through all 16 cell voltages and finds the maximum value.
- * 
+ *
+ * Iterates through all configured cells and finds the maximum value.
+ *
  * @return Largest cell voltage (uint16_t).
  */
-uint16_t get_largest_cell_voltage()
+uint16_t get_largest_cell_voltage(void)
 {
     uint16_t largest_voltage = 0x0000;
-    for (int i = 0; i < 16; i++)
+
+    for (uint8_t cell = 0; cell < BMS_CELL_COUNT; cell++)
     {
-        if (CellVoltage[i] > largest_voltage)
+        if (CellVoltage[cell] > largest_voltage)
         {
-            largest_voltage = CellVoltage[i];
+            largest_voltage = CellVoltage[cell];
         }
     }
 
