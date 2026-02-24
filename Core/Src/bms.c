@@ -192,8 +192,8 @@ void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
     TX_data[1] = (data >> 8) & 0xff;
 
     if (type == R)
-    {   //WARNING: is this ok?
-        SPI_ReadReg(command, RX_32Byte, 2, rxdata);    // RX_data is a global variable
+    {
+        SPI_ReadReg(command, RX_32Byte, 2, rxdata);
         HAL_Delay(2);
     }
     if (type == W)
@@ -421,7 +421,7 @@ void BQ769x2_readall_voltages(void)
  */
 int16_t BQ769x2_ReadCurrent()
 {
-    DirectCommands(0x3A, 0x00, R);
+    DirectCommands(ADDR_CC2_CURRENT, 0x00, R);
     return (RX_32Byte[1] * 256 + RX_32Byte[0]);    // current is reported in mA
 }
 
@@ -452,12 +452,14 @@ float BQ769x2_ReadTemperature(uint8_t command)
 void BQ769x2_ReadSafetyStatus()
 {
     DirectCommands(ADDR_SAFETY_STATUS_A, 0x00, R);
-    value_SafetyStatusA = (RX_32Byte[1] * 256 + RX_32Byte[0]);
+    value_SafetyStatusA = RX_32Byte[0];
 
-    OV_Fault = ((0x8 & RX_32Byte[0]) >> 3);
-    UV_Fault = ((0x4 & RX_32Byte[0]) >> 2);
-    // SCD_Fault = ((0x8 & RX_32Byte[1])>>3);
-    // OCD_Fault = ((0x2 & RX_32Byte[1])>>1);
+    UV_Fault = (0x4 & RX_32Byte[0]) >> 2;
+    OV_Fault = (0x8 & RX_32Byte[0]) >> 3;
+    // OCC_Fault = (0x10 & RX_32Byte[0]) >> 4;
+    // OCD1_Fault = (0x20 & RX_32Byte[0]) >> 5;
+    // OCD2_Fault = (0x40 & RX_32Byte[0]) >> 6;
+    // SCD_Fault = (0x80 & RX_32Byte[0]) >> 7;
 
     // check if any over-current bits are set
     if ((RX_32Byte[0] & 0xF0) != 0)
@@ -470,7 +472,7 @@ void BQ769x2_ReadSafetyStatus()
     }
 
     DirectCommands(ADDR_SAFETY_STATUS_B, 0x00, R);
-    value_SafetyStatusB = (RX_32Byte[1] * 256 + RX_32Byte[0]);
+    value_SafetyStatusB = RX_32Byte[0];
 
     // check if any over-temperature bits are set
     if ((RX_32Byte[0] & 0xF0) != 0)
@@ -484,7 +486,7 @@ void BQ769x2_ReadSafetyStatus()
 
     /* Safety Status C needed? */
      DirectCommands(ADDR_SAFETY_STATUS_C, 0x00, R);
-     value_SafetyStatusC = (RX_32Byte[1] * 256 + RX_32Byte[0]);
+     value_SafetyStatusC = RX_32Byte[0];
 
     if ((value_SafetyStatusA + value_SafetyStatusB + value_SafetyStatusC) > 0)
     {
@@ -511,11 +513,13 @@ void BQ769x2_ReadSafetyStatus()
 void BQ769x2_ReadPFStatus()
 {
     DirectCommands(ADDR_PF_STATUS_A, 0x00, R);
-    value_PFStatusA = (RX_32Byte[1] * 256 + RX_32Byte[0]);
+    value_PFStatusA = RX_32Byte[0];
+
     DirectCommands(ADDR_PF_STATUS_B, 0x00, R);
-    value_PFStatusB = (RX_32Byte[1] * 256 + RX_32Byte[0]);
+    value_PFStatusB = RX_32Byte[0];
+    
     DirectCommands(ADDR_PF_STATUS_C, 0x00, R);
-    value_PFStatusC = (RX_32Byte[1] * 256 + RX_32Byte[0]);
+    value_PFStatusC = RX_32Byte[0];
 
     if ((value_PFStatusA + value_PFStatusB + value_PFStatusC) > 0)
     {
@@ -554,10 +558,10 @@ uint16_t BQ769x2_ReadAlarmStatus()
 void BQ769x2_ReadFETStatus()
 {
     DirectCommands(ADDR_FET_STATUS, 0x00, R);
-    FET_Status = (RX_32Byte[1] * 256 + RX_32Byte[0]);
+    FET_Status = RX_32Byte[0];
 
-    DSG = ((0x4 & RX_32Byte[0]) >> 2);
     CHG = (0x1 & RX_32Byte[0]);
+    DSG = (0x4 & RX_32Byte[0]) >> 2;
 }
 
 /**
