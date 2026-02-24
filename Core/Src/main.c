@@ -113,9 +113,10 @@ osSemaphoreId_t         semaphore_1Handle;
 const osSemaphoreAttr_t semaphore_1_attributes = {
     .name = "semaphore_1"};
 /* USER CODE BEGIN PV */
-float    Temperature[3] = {0.0f};
+float Temperature[3] = {0.0f};
 
 char opening_msg[] = "\r\n\r\nEKTELI BMS, version 1.0\r\n";
+
 const uint16_t version = 110;    // e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
 
 
@@ -931,7 +932,7 @@ void bms_main_task(void *argument)
         }
 
         uint16_t AlarmBits = BQ769x2_ReadAlarmStatus();
-        uint8_t fuse_ok;
+        uint8_t  fuse_ok;
         if (AlarmBits & 0x0008)
         {
             fuse_ok = 0;    // blown
@@ -967,7 +968,7 @@ void bms_main_task(void *argument)
         buffer[7] = get_fet_status();
         can_msg_transmit(CAN_ID_BMS_OPERATION, (uint8_t *)&buffer, 8, 100u);
 
-        if(resetear_bms == 1u)
+        if (resetear_bms == 1u)
         {
             CommandSubcommands(ADDR_RESET);
             HAL_Delay(100);

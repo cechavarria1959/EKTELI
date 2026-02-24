@@ -271,7 +271,7 @@ HAL_StatusTypeDef can_msg_ack(uint32_t can_id, uint32_t timeout)
 /* Private user code ---------------------------------------------------------*/
 /**
  * @brief CAN RX FIFO 0 message pending callback.
- * 
+ *
  * @param  hcan pointer to a CAN_HandleTypeDef structure that contains
  *         the configuration information for the specified CAN.
  */

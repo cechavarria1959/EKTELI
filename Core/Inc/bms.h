@@ -24,27 +24,27 @@
 typedef enum
 {
     /* Direct Commands (1 byte command) */
-    ADDR_CONTROL_STATUS       = 0x00,
-    ADDR_SAFETY_ALERT_STATUS  = 0x02,    // hasta 0x07
-    ADDR_SAFETY_STATUS_A      = 0x03,
-    ADDR_SAFETY_STATUS_B      = 0x05,
-    ADDR_SAFETY_STATUS_C      = 0x07,
-    ADDR_PF_ALERT_STATUS      = 0x0A,    // hasta 0x11
-    ADDR_PF_STATUS_A          = 0x0B,
-    ADDR_PF_STATUS_B          = 0x0D,
-    ADDR_PF_STATUS_C          = 0x0F,
-    ADDR_BATTERY_STATUS       = 0x12,
-    ADDR_CELL_VOLTAGES        = 0x14,    // hasta 0x32
-    ADDR_STACK_VOLTAGE        = 0x34,
-    ADDR_PACK_PIN_VOLTAGE     = 0x36,
-    ADDR_LD_PIN_VOLTAGE       = 0x38,
-    ADDR_CC2_CURRENT          = 0x3A,
-    ADDR_ALARM_STATUS         = 0x62,
-    ADDR_ALARM_RAW_STATUS     = 0x64,
-    ADDR_ALARM_ENABLE         = 0x66,
-    ADDR_INTERNAL_TEMP        = 0x68,
-    ADDR_THERMISTOR_TEMP      = 0x6A,    // hasta 0x7A
-    ADDR_FET_STATUS           = 0x7F,
+    ADDR_CONTROL_STATUS      = 0x00,
+    ADDR_SAFETY_ALERT_STATUS = 0x02,    // hasta 0x07
+    ADDR_SAFETY_STATUS_A     = 0x03,
+    ADDR_SAFETY_STATUS_B     = 0x05,
+    ADDR_SAFETY_STATUS_C     = 0x07,
+    ADDR_PF_ALERT_STATUS     = 0x0A,    // hasta 0x11
+    ADDR_PF_STATUS_A         = 0x0B,
+    ADDR_PF_STATUS_B         = 0x0D,
+    ADDR_PF_STATUS_C         = 0x0F,
+    ADDR_BATTERY_STATUS      = 0x12,
+    ADDR_CELL_VOLTAGES       = 0x14,    // hasta 0x32
+    ADDR_STACK_VOLTAGE       = 0x34,
+    ADDR_PACK_PIN_VOLTAGE    = 0x36,
+    ADDR_LD_PIN_VOLTAGE      = 0x38,
+    ADDR_CC2_CURRENT         = 0x3A,
+    ADDR_ALARM_STATUS        = 0x62,
+    ADDR_ALARM_RAW_STATUS    = 0x64,
+    ADDR_ALARM_ENABLE        = 0x66,
+    ADDR_INTERNAL_TEMP       = 0x68,
+    ADDR_THERMISTOR_TEMP     = 0x6A,    // hasta 0x7A
+    ADDR_FET_STATUS          = 0x7F,
 
     /* Subcommands (2 bytes commands) */
     ADDR_DEVICE_NUMBER        = 0x0001,
@@ -485,16 +485,16 @@ typedef enum
 /* Exported constants and defines --------------------------------------------*/
 /** @brief BMS Model Selection */
 #if defined(BMS_MODEL_10S)
-    #define BMS_CELL_COUNT            (10u)
-    #define BMS_CONSECUTIVE_CELLS     (9u)
+#define BMS_CELL_COUNT        (10u)
+#define BMS_CONSECUTIVE_CELLS (9u)
 #elif defined(BMS_MODEL_14S)
-    #define BMS_CELL_COUNT            (14u)
-    #define BMS_CONSECUTIVE_CELLS     (13u)
+#define BMS_CELL_COUNT        (14u)
+#define BMS_CONSECUTIVE_CELLS (13u)
 #else
-    #error "BMS model not defined. Define BMS_MODEL_10S or BMS_MODEL_14S"
+#error "BMS model not defined. Define BMS_MODEL_10S or BMS_MODEL_14S"
 #endif
 
-#define BMS_LAST_CELL_INDEX       (15u)    /* Cell 16 address index (0-based) */
+#define BMS_LAST_CELL_INDEX (15u) /* Cell 16 address index (0-based) */
 
 
 /* Exported macros -----------------------------------------------------------*/

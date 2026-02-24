@@ -34,7 +34,7 @@
 
 
 /* Private (static) variables ------------------------------------------------*/
-uint8_t rxdata[4] = {0};
+uint8_t rxdata[4]     = {0};
 uint8_t RX_32Byte[32] = {0};
 
 uint16_t CellVoltage[16] = {0};
@@ -208,7 +208,7 @@ void DirectCommands(uint8_t command, uint16_t data, uint8_t type)
  *
  * This function sends a subcommand to the device using the Command
  * register (0x3E).
- * 
+ *
  * Note: For certain subcommands like DEEPSLEEP or SHUTDOWN,
  * this function must be called twice consecutively.
  *
@@ -315,7 +315,7 @@ void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
             SPI_WriteReg(0x3E, TX_RegData, 3, rxdata);
             HAL_Delay(2);
             TX_Buffer[0] = Checksum(TX_RegData, 3);
-            TX_Buffer[1] = 0x05; 
+            TX_Buffer[1] = 0x05;
             SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);
             HAL_Delay(2);
             break;
@@ -325,7 +325,7 @@ void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
             SPI_WriteReg(0x3E, TX_RegData, 4, rxdata);
             HAL_Delay(2);
             TX_Buffer[0] = Checksum(TX_RegData, 4);
-            TX_Buffer[1] = 0x06; 
+            TX_Buffer[1] = 0x06;
             SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);
             HAL_Delay(2);
             break;
@@ -337,7 +337,7 @@ void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen)
             SPI_WriteReg(0x3E, TX_RegData, 6, rxdata);
             HAL_Delay(2);
             TX_Buffer[0] = Checksum(TX_RegData, 6);
-            TX_Buffer[1] = 0x08; 
+            TX_Buffer[1] = 0x08;
             SPI_WriteReg(0x60, TX_Buffer, 2, rxdata);
             HAL_Delay(2);
             break;
@@ -380,7 +380,7 @@ uint16_t BQ769x2_ReadVoltage(uint8_t command)
  */
 void BQ769x2_Readcell_voltages(void)
 {
-    uint8_t cell_addr = ADDR_CELL_VOLTAGES;    /* Cell1Voltage is 0x14 */
+    uint8_t cell_addr = ADDR_CELL_VOLTAGES; /* Cell1Voltage is 0x14 */
 
     /* Read consecutive cells (1 to N-1) */
     for (uint8_t cell = 0; cell < BMS_CONSECUTIVE_CELLS; cell++)
@@ -391,6 +391,7 @@ void BQ769x2_Readcell_voltages(void)
 
     /* Read last cell from Cell 16 address */
     cell_addr = ADDR_CELL_VOLTAGES + (BMS_LAST_CELL_INDEX * 2);
+
     CellVoltage[BMS_CELL_COUNT - 1] = BQ769x2_ReadVoltage(cell_addr);
 }
 
@@ -444,9 +445,9 @@ float BQ769x2_ReadTemperature(uint8_t command)
  * @brief Reads the Safety Status registers (A/B/C) from the BQ769x2 device.
  *
  * This function checks which primary protections have been triggered by reading
- * the Safety Status A and B registers. It extracts Overvoltage (OV), 
- * Undervoltage (UV), and Overcurrent (OC) fault bits. Overtemperature (OT) 
- * faults are checked from Safety Status B. If any protection is triggered, 
+ * the Safety Status A and B registers. It extracts Overvoltage (OV),
+ * Undervoltage (UV), and Overcurrent (OC) fault bits. Overtemperature (OT)
+ * faults are checked from Safety Status B. If any protection is triggered,
  * the ProtectionsTriggered flag is set.
  */
 void BQ769x2_ReadSafetyStatus()
@@ -485,8 +486,8 @@ void BQ769x2_ReadSafetyStatus()
     }
 
     /* Safety Status C needed? */
-     DirectCommands(ADDR_SAFETY_STATUS_C, 0x00, R);
-     value_SafetyStatusC = RX_32Byte[0];
+    DirectCommands(ADDR_SAFETY_STATUS_C, 0x00, R);
+    value_SafetyStatusC = RX_32Byte[0];
 
     if ((value_SafetyStatusA + value_SafetyStatusB + value_SafetyStatusC) > 0)
     {
@@ -498,16 +499,16 @@ void BQ769x2_ReadSafetyStatus()
     }
 
     /* Read safety alert statuses */
-    DirectCommands(0x02, 0, R); //safety alert A
-    DirectCommands(0x04, 0, R); //safety alert B
-    DirectCommands(0x06, 0, R); //safety alert C
+    DirectCommands(0x02, 0, R);    // safety alert A
+    DirectCommands(0x04, 0, R);    // safety alert B
+    DirectCommands(0x06, 0, R);    // safety alert C
 }
 
 /**
  * @brief Reads the Permanent Fail Status registers (A/B/C) from the BQ769x2.
  *
  * This function checks which permanent failures have been triggered by reading
- * the Permanent Fail Status A, B, and C registers. If any permanent fault is 
+ * the Permanent Fail Status A, B, and C registers. If any permanent fault is
  * detected, the PermanentFaultTriggered flag is set.
  */
 void BQ769x2_ReadPFStatus()
@@ -517,7 +518,7 @@ void BQ769x2_ReadPFStatus()
 
     DirectCommands(ADDR_PF_STATUS_B, 0x00, R);
     value_PFStatusB = RX_32Byte[0];
-    
+
     DirectCommands(ADDR_PF_STATUS_C, 0x00, R);
     value_PFStatusC = RX_32Byte[0];
 
@@ -530,12 +531,12 @@ void BQ769x2_ReadPFStatus()
         PermanentFaultTriggered = 0;
     }
 
-    DirectCommands(0x11, 0, R); // pf status D
+    DirectCommands(0x11, 0, R);    // pf status D
 
-    DirectCommands(0x0A, 0, R); // pf alert A
-    DirectCommands(0x0C, 0, R); // pf alert B
-    DirectCommands(0x0E, 0, R); // pf alert C
-    DirectCommands(0x10, 0, R); // pf alert D
+    DirectCommands(0x0A, 0, R);    // pf alert A
+    DirectCommands(0x0C, 0, R);    // pf alert B
+    DirectCommands(0x0E, 0, R);    // pf alert C
+    DirectCommands(0x10, 0, R);    // pf alert D
 }
 
 /**
@@ -720,10 +721,10 @@ uint16_t get_largest_cell_voltage(void)
 
 /**
  * @brief Gets the BMS status.
- * 
+ *
  * Returns 3 if any protection or permanent fault is triggered, otherwise
  * returns 1 for normal operation.
- * 
+ *
  * @return BMS status (uint8_t): 3 = Fault, 1 = Normal.
  */
 uint8_t get_bms_status(void)
@@ -744,9 +745,9 @@ uint8_t get_bms_status(void)
 
 /**
  * @brief Gets the cell balancing status.
- * 
+ *
  * Checks if any cell balancing is active by reading balancing active cells.
- * 
+ *
  * @return Balancing status (uint8_t): 1 = Active, 0 = Inactive.
  */
 uint8_t get_balancing_status(void)
@@ -770,9 +771,9 @@ uint8_t get_balancing_status(void)
 
 /**
  * @brief Gets the charging status.
- * 
+ *
  * Determines charging status based on FETs and current or voltage readings.
- * 
+ *
  * @return Charging status (uint8_t): 1 = Charging, 0 = Not charging.
  */
 uint8_t get_charging_status(void)
@@ -811,10 +812,10 @@ uint8_t get_charging_status(void)
 
 /**
  * @brief Gets BMS faults.
- * 
+ *
  * Returns a bitfield representing various fault conditions if any protection
  * or permanent fault is triggered.
- * 
+ *
  * @return Fault bitfield (uint8_t).
  */
 uint8_t bms_get_faults(void)
@@ -831,9 +832,9 @@ uint8_t bms_get_faults(void)
 
 /**
  * @brief Gets the FET status.
- * 
+ *
  * Returns the status of CHG and DSG FETs as a bitfield.
- * 
+ *
  * @return FET status (uint8_t).
  */
 uint8_t get_fet_status(void)
@@ -843,14 +844,14 @@ uint8_t get_fet_status(void)
 
 /**
  * @brief Disable discharge FETs
- * 
+ *
  * @details The DCHG pin is used to control the external discharge FETs.
  * assert the DFETOFF pin to keep the FETs off. As long as the pin is asserted,
  * the FETs are blocked from being reenabled. When the pin is deasserted,
  * the BQ76952 will reenable the FETs if nothing is blocking them being
  * reenabled (such as fault conditions still present, or the CFETOFF or
  * DFETOFF pins are asserted).
- * 
+ *
  * @note The DFETOFF or BOTHOFF functionality disables both the DSG FET and
  * the PDSG FET when asserted.
  */
@@ -860,7 +861,7 @@ void bms_dfet_off(void)
 
 /**
  * @brief Reset or shutdown BMS monitor
- * 
+ *
  * @details During normal operation, the RST_SHUT pin should be driven low.
  * When the pin is driven high, the BMS will immediately reset most of the
  * digital logic, including that associated with the serial communications bus.
