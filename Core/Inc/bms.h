@@ -529,4 +529,7 @@ float BQ769x2_ReadTemperature(uint8_t command);
 
 bms_otp_status_t bms_otp_check(void);
 
+void read_cuv_voltages(void);
+void BQ769x2_readall_voltages(void);
+
 #endif /* INC_BMS_H_ */

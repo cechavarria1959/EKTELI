@@ -225,6 +225,14 @@ void CommandSubcommands(uint16_t command)
     HAL_Delay(2);
 }
 
+void read_cuv_voltages()
+{
+    Subcommands(ADDR_CUV_SNAPSHOT, 0, 0);
+    volatile uint16_t celdas[16] = {0};
+    memcpy(celdas, RX_32Byte, 2);
+    __NOP();
+}
+
 /**
  * @brief Executes a subcommand with optional data via SPI.
  *
@@ -386,6 +394,23 @@ void BQ769x2_Readcell_voltages(void)
     CellVoltage[BMS_CELL_COUNT - 1] = BQ769x2_ReadVoltage(cell_addr);
 }
 
+void BQ769x2_readall_voltages(void)
+{
+    int cellvoltageholder = ADDR_CELL_VOLTAGES;    // Cell1Voltage is 0x14
+
+    volatile uint16_t allvoltages[16];
+
+    for (int x = 0; x < 16; x++)
+    {
+        allvoltages[x] = BQ769x2_ReadVoltage(cellvoltageholder);
+        cellvoltageholder += 2;
+    }
+
+    UNUSED(allvoltages[0]);
+
+    __NOP();
+}
+
 /**
  * @brief Reads current value from BQ769x2 device.
  *
@@ -458,8 +483,8 @@ void BQ769x2_ReadSafetyStatus()
     }
 
     /* Safety Status C needed? */
-    // DirectCommands(ADDR_SAFETY_STATUS_C, 0x00, R);
-    // value_SafetyStatusC = (rxdata[1] * 256 + rxdata[0]);
+     DirectCommands(ADDR_SAFETY_STATUS_C, 0x00, R);
+     value_SafetyStatusC = (rxdata[1] * 256 + rxdata[0]);
 
     if ((value_SafetyStatusA + value_SafetyStatusB + value_SafetyStatusC) > 0)
     {
@@ -469,6 +494,11 @@ void BQ769x2_ReadSafetyStatus()
     {
         ProtectionsTriggered = 0;
     }
+
+    /* Read safety alert statuses */
+    DirectCommands(0x02, 0, R); //safety alert A
+    DirectCommands(0x04, 0, R); //safety alert B
+    DirectCommands(0x06, 0, R); //safety alert C
 }
 
 /**
@@ -495,6 +525,13 @@ void BQ769x2_ReadPFStatus()
     {
         PermanentFaultTriggered = 0;
     }
+
+    DirectCommands(0x11, 0, R); // pf status D
+
+    DirectCommands(0x0A, 0, R); // pf alert A
+    DirectCommands(0x0C, 0, R); // pf alert B
+    DirectCommands(0x0E, 0, R); // pf alert C
+    DirectCommands(0x10, 0, R); // pf alert D
 }
 
 /**

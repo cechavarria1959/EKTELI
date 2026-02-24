@@ -118,6 +118,9 @@ float    Temperature[3] = {0.0f};
 char opening_msg[] = "\r\n\r\nEKTELI BMS, version 1.0\r\n";
 const uint16_t version = 110;    // e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
 
+
+volatile uint8_t resetear_bms = 0;    // Set to 1 to reset the BMS by sending the reset command in the main loop
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -868,6 +871,11 @@ void bms_main_task(void *argument)
             voltage = MIN_PACK_VOLTAGE_MV;
         }
 
+        /* Reading status */
+        Subcommands(DA_CONFIGURATION, 0, 0);
+
+        read_cuv_voltages();
+
         int16_t current = BQ769x2_ReadCurrent() / 10;    // mA -> A -> CAN doc units: (val mA * (1 A / 1000 mA) * (100 units / 1 A)) = val / 10
 
         Temperature[0] = BQ769x2_ReadTemperature(0x70);    // TS1Temperature
@@ -902,6 +910,14 @@ void bms_main_task(void *argument)
         BQ769x2_ReadSafetyStatus();
         BQ769x2_ReadPFStatus();
         BQ769x2_Readcell_voltages();
+        BQ769x2_readall_voltages();
+
+        Subcommands(CUV_THRESHOLD, 0, 0);
+        Subcommands(CUV_DELAY, 0, 0);
+        Subcommands(CUV_RECOVERY_HYSTERESIS, 0, 0);
+        Subcommands(CUV_THRESHOLD_OVERRIDE, 0, 0);
+        Subcommands(FET_OPTIONS, 0, 0);
+
         uint16_t min_voltage = get_smallest_cell_voltage();
         uint16_t max_voltage = get_largest_cell_voltage();
         float    max_temp    = Temperature[0] > Temperature[1] ? Temperature[0] : Temperature[1];
@@ -950,6 +966,13 @@ void bms_main_task(void *argument)
         buffer[6] = get_bms_status();
         buffer[7] = get_fet_status();
         can_msg_transmit(CAN_ID_BMS_OPERATION, (uint8_t *)&buffer, 8, 100u);
+
+        if(resetear_bms == 1u)
+        {
+            CommandSubcommands(ADDR_RESET);
+            HAL_Delay(100);
+            bms_init();
+        }
 
         osDelay(pdMS_TO_TICKS(500));
     }
