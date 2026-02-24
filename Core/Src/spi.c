@@ -98,7 +98,9 @@ void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rx
  * @param reg_addr  The starting register address to read from.
  * @param reg_data  Pointer to the buffer where read data will be stored.
  * @param count     Number of bytes to read.
- * @param rxdata    Pointer to a buffer to store received SPI data (=4 bytes).
+ * @param rxdata    Pointer to a buffer to store intermediate received SPI data (=4 bytes).
+ *
+ * @note for examples on transactions, can read SLUAA11B
  */
 void SPI_ReadReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxdata[4])
 {

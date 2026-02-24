@@ -23,6 +23,7 @@
 /* Exported types ------------------------------------------------------------*/
 typedef enum
 {
+    /* Direct Commands (1 byte command) */
     ADDR_CONTROL_STATUS       = 0x00,
     ADDR_SAFETY_ALERT_STATUS  = 0x02,    // hasta 0x07
     ADDR_SAFETY_STATUS_A      = 0x03,
@@ -44,6 +45,8 @@ typedef enum
     ADDR_INTERNAL_TEMP        = 0x68,
     ADDR_THERMISTOR_TEMP      = 0x6A,    // hasta 0x7A
     ADDR_FET_STATUS           = 0x7F,
+
+    /* Subcommands (2 bytes commands) */
     ADDR_DEVICE_NUMBER        = 0x0001,
     ADDR_FW_VERSION           = 0x0002,
     ADDR_HW_VERSION           = 0x0003,
