@@ -23,27 +23,30 @@
 /* Exported types ------------------------------------------------------------*/
 typedef enum
 {
-    ADDR_CONTROL_STATUS       = 0x00,
-    ADDR_SAFETY_ALERT_STATUS  = 0x02,    // hasta 0x07
-    ADDR_SAFETY_STATUS_A      = 0x03,
-    ADDR_SAFETY_STATUS_B      = 0x05,
-    ADDR_SAFETY_STATUS_C      = 0x07,
-    ADDR_PF_ALERT_STATUS      = 0x0A,    // hasta 0x11
-    ADDR_PF_STATUS_A          = 0x0B,
-    ADDR_PF_STATUS_B          = 0x0D,
-    ADDR_PF_STATUS_C          = 0x0F,
-    ADDR_BATTERY_STATUS       = 0x12,
-    ADDR_CELL_VOLTAGES        = 0x14,    // hasta 0x32
-    ADDR_STACK_VOLTAGE        = 0x34,
-    ADDR_PACK_PIN_VOLTAGE     = 0x36,
-    ADDR_LD_PIN_VOLTAGE       = 0x38,
-    ADDR_CC2_CURRENT          = 0x3A,
-    ADDR_ALARM_STATUS         = 0x62,
-    ADDR_ALARM_RAW_STATUS     = 0x64,
-    ADDR_ALARM_ENABLE         = 0x66,
-    ADDR_INTERNAL_TEMP        = 0x68,
-    ADDR_THERMISTOR_TEMP      = 0x6A,    // hasta 0x7A
-    ADDR_FET_STATUS           = 0x7F,
+    /* Direct Commands (1 byte command) */
+    ADDR_CONTROL_STATUS      = 0x00,
+    ADDR_SAFETY_ALERT_STATUS = 0x02,    // hasta 0x07
+    ADDR_SAFETY_STATUS_A     = 0x03,
+    ADDR_SAFETY_STATUS_B     = 0x05,
+    ADDR_SAFETY_STATUS_C     = 0x07,
+    ADDR_PF_ALERT_STATUS     = 0x0A,    // hasta 0x11
+    ADDR_PF_STATUS_A         = 0x0B,
+    ADDR_PF_STATUS_B         = 0x0D,
+    ADDR_PF_STATUS_C         = 0x0F,
+    ADDR_BATTERY_STATUS      = 0x12,
+    ADDR_CELL_VOLTAGES       = 0x14,    // hasta 0x32
+    ADDR_STACK_VOLTAGE       = 0x34,
+    ADDR_PACK_PIN_VOLTAGE    = 0x36,
+    ADDR_LD_PIN_VOLTAGE      = 0x38,
+    ADDR_CC2_CURRENT         = 0x3A,
+    ADDR_ALARM_STATUS        = 0x62,
+    ADDR_ALARM_RAW_STATUS    = 0x64,
+    ADDR_ALARM_ENABLE        = 0x66,
+    ADDR_INTERNAL_TEMP       = 0x68,
+    ADDR_THERMISTOR_TEMP     = 0x6A,    // hasta 0x7A
+    ADDR_FET_STATUS          = 0x7F,
+
+    /* subcommands (2 bytes commands) */
     ADDR_DEVICE_NUMBER        = 0x0001,
     ADDR_FW_VERSION           = 0x0002,
     ADDR_HW_VERSION           = 0x0003,
@@ -480,6 +483,18 @@ typedef enum
 } bms_command_t;
 
 /* Exported constants and defines --------------------------------------------*/
+/** @brief BMS Model Selection */
+#if defined(BMS_MODEL_10S)
+#define BMS_CELL_COUNT        (10u)
+#define BMS_CONSECUTIVE_CELLS (9u)
+#elif defined(BMS_MODEL_14S)
+#define BMS_CELL_COUNT        (14u)
+#define BMS_CONSECUTIVE_CELLS (13u)
+#else
+#error "BMS model not defined. Define BMS_MODEL_10S or BMS_MODEL_14S"
+#endif
+
+#define BMS_LAST_CELL_INDEX (15u) /* Cell 16 address index (0-based) */
 
 
 /* Exported macros -----------------------------------------------------------*/
@@ -490,15 +505,15 @@ void bms_init(void);
 void bms_dfet_off(void);
 void bms_reset_shutdown(void);
 
-void CommandSubcommands(uint16_t command);
-void Subcommands(uint16_t command, uint16_t data, uint8_t type);
-void DirectCommands(uint8_t command, uint16_t data, uint8_t type);
+void command_subcommands(uint16_t command);
+void subcommands(uint16_t command, uint16_t data, uint8_t type);
+void direct_commands(uint8_t command, uint16_t data, uint8_t type);
 
-void BQ769x2_ReadPFStatus(void);
-void BQ769x2_ReadFETStatus(void);
-void BQ769x2_ReadSafetyStatus(void);
-void BQ769x2_Readcell_voltages(void);
-void BQ769x2_SetRegister(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen);
+void bq769x2_read_pf_status(void);
+void bq769x2_read_fet_status(void);
+void bq769x2_read_safety_status(void);
+void bq769x2_read_cell_voltages(void);
+void bq769x2_set_register(uint16_t reg_addr, uint32_t reg_data, uint8_t datalen);
 
 uint8_t bms_get_faults(void);
 uint8_t get_fet_status(void);
@@ -506,15 +521,18 @@ uint8_t get_bms_status(void);
 uint8_t get_charging_status(void);
 uint8_t get_balancing_status(void);
 
-int16_t BQ769x2_ReadCurrent(void);
+int16_t bq769x2_read_current(void);
 
-uint16_t BQ769x2_ReadAlarmStatus(void);
+uint16_t bq769x2_read_alarm_status(void);
 uint16_t get_largest_cell_voltage(void);
 uint16_t get_smallest_cell_voltage(void);
-uint16_t BQ769x2_ReadVoltage(uint8_t command);
+uint16_t bq769x2_read_voltage(uint8_t command);
 
-float BQ769x2_ReadTemperature(uint8_t command);
+float bq769x2_read_temperature(uint8_t command);
 
 bms_otp_status_t bms_otp_check(void);
+
+void read_cuv_voltages(void);
+void bq769x2_readall_voltages(void);
 
 #endif /* INC_BMS_H_ */

@@ -42,7 +42,7 @@
 
 
 /* Private function prototypes -----------------------------------------------*/
-unsigned char CRC8(unsigned char *ptr, unsigned char len);
+unsigned char crc8(unsigned char *ptr, unsigned char len);
 
 
 /* Public user code ----------------------------------------------------------*/
@@ -54,10 +54,10 @@ unsigned char CRC8(unsigned char *ptr, unsigned char len);
  * @param count     Number of bytes to write.
  * @param rxdata    Pointer to a buffer to store received SPI data (4 bytes).
  */
-void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxdata[4])
+void spi_write_register(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxdata[4])
 {
     uint8_t      addr;
-    uint8_t      TX_Buffer[MAX_BUFFER_SIZE] = {0x00};
+    uint8_t      tx_buffer[MAX_BUFFER_SIZE] = {0x00};
     unsigned int i;
     unsigned int match;
     unsigned int retries = 10;
@@ -67,19 +67,19 @@ void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rx
 
     for (i = 0; i < count; i++)
     {
-        TX_Buffer[0] = addr;
-        TX_Buffer[1] = reg_data[i];
-        TX_Buffer[2] = CRC8(TX_Buffer, 2);
+        tx_buffer[0] = addr;
+        tx_buffer[1] = reg_data[i];
+        tx_buffer[2] = crc8(tx_buffer, 2);
 
         HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_RESET);
-        HAL_SPI_TransmitReceive(&hspi1, TX_Buffer, rxdata, 3, 1);
+        HAL_SPI_TransmitReceive(&hspi1, tx_buffer, rxdata, 3, 1);
         HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_SET);
 
         while ((match == 0) & (retries > 0))
         {
             HAL_Delay(1);
             HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_RESET);
-            HAL_SPI_TransmitReceive(&hspi1, TX_Buffer, rxdata, 3, 1);
+            HAL_SPI_TransmitReceive(&hspi1, tx_buffer, rxdata, 3, 1);
             HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_SET);
             if ((rxdata[0] == addr) & (rxdata[1] == reg_data[i]))
                 match = 1;
@@ -98,12 +98,14 @@ void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rx
  * @param reg_addr  The starting register address to read from.
  * @param reg_data  Pointer to the buffer where read data will be stored.
  * @param count     Number of bytes to read.
- * @param rxdata    Pointer to a buffer to store received SPI data (=4 bytes).
+ * @param rxdata    Pointer to a buffer to store intermediate received SPI data (=4 bytes).
+ *
+ * @note for examples on transactions, can read SLUAA11B
  */
-void SPI_ReadReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxdata[4])
+void spi_read_register(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxdata[4])
 {
     uint8_t      addr;
-    uint8_t      TX_Buffer[MAX_BUFFER_SIZE] = {0x00};
+    uint8_t      tx_buffer[MAX_BUFFER_SIZE] = {0x00};
     unsigned int i;
     unsigned int match;
     unsigned int retries = 10;
@@ -113,19 +115,19 @@ void SPI_ReadReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxd
 
     for (i = 0; i < count; i++)
     {
-        TX_Buffer[0] = addr;
-        TX_Buffer[1] = 0xFF;
-        TX_Buffer[2] = CRC8(TX_Buffer, 2);
+        tx_buffer[0] = addr;
+        tx_buffer[1] = 0xFF;
+        tx_buffer[2] = crc8(tx_buffer, 2);
 
         HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_RESET);
-        HAL_SPI_TransmitReceive(&hspi1, TX_Buffer, rxdata, 3, 1);
+        HAL_SPI_TransmitReceive(&hspi1, tx_buffer, rxdata, 3, 1);
         HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_SET);
 
         while ((match == 0) & (retries > 0))
         {
             HAL_Delay(1);
             HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_RESET);
-            HAL_SPI_TransmitReceive(&hspi1, TX_Buffer, rxdata, 3, 1);
+            HAL_SPI_TransmitReceive(&hspi1, tx_buffer, rxdata, 3, 1);
             HAL_GPIO_WritePin(SPI_CS_GPIO_Port, SPI_CS_Pin, GPIO_PIN_SET);
             if (rxdata[0] == addr)
             {
@@ -148,7 +150,7 @@ void SPI_ReadReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxd
  * @param len   Length of the data buffer in bytes.
  * @return      The calculated CRC8 value.
  */
-unsigned char CRC8(unsigned char *ptr, unsigned char len)
+unsigned char crc8(unsigned char *ptr, unsigned char len)
 {
     unsigned char i;
     unsigned char crc = 0;
@@ -169,5 +171,5 @@ unsigned char CRC8(unsigned char *ptr, unsigned char len)
         }
         ptr++;
     }
-    return (crc);
+    return crc;
 }

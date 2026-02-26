@@ -28,7 +28,7 @@
 
 
 /* Exported function prototypes ----------------------------------------------*/
-void SPI_ReadReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxdata[4]);
-void SPI_WriteReg(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxdata[4]);
+void spi_read_register(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxdata[4]);
+void spi_write_register(uint8_t reg_addr, uint8_t *reg_data, uint8_t count, uint8_t rxdata[4]);
 
 #endif /* INC_SPI_H_ */

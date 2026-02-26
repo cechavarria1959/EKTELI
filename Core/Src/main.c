@@ -113,10 +113,13 @@ osSemaphoreId_t         semaphore_1Handle;
 const osSemaphoreAttr_t semaphore_1_attributes = {
     .name = "semaphore_1"};
 /* USER CODE BEGIN PV */
-float    Temperature[3] = {0.0f};
 
-char opening_msg[] = "\r\n\r\nEKTELI BMS, version 1.0\r\n";
+char opening_msg[] = "\r\n\r\nEKTELI BMS, version 1.1\r\n";
+
 const uint16_t version = 110;    // e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
+
+// for debugging purposes
+volatile uint8_t resetear_bms = 0;    // Set to 1 to reset the BMS by sending the reset command in the main loop
 
 /* USER CODE END PV */
 
@@ -236,9 +239,9 @@ int main(void)
 
     transmit_fw_version();
 
-    Subcommands(ADDR_DEVICE_NUMBER, 0, 0);
-    DirectCommands(ADDR_BATTERY_STATUS, 0, 0);    // read
-    DirectCommands(ADDR_ALARM_RAW_STATUS, 0, 0);
+    subcommands(ADDR_DEVICE_NUMBER, 0, 0);
+    direct_commands(ADDR_BATTERY_STATUS, 0, 0);    // read
+    direct_commands(ADDR_ALARM_RAW_STATUS, 0, 0);
     HAL_Delay(60);
 
     bms_otp_status_t otp_status = bms_otp_check();
@@ -246,9 +249,9 @@ int main(void)
     bms_init();    // Configure all of the BQ769x2 register settings
 
     HAL_Delay(10);
-    CommandSubcommands(ADDR_FET_ENABLE);    // Enable the CHG and DSG FETs
+    command_subcommands(ADDR_FET_ENABLE);    // Enable the CHG and DSG FETs
     HAL_Delay(10);
-    CommandSubcommands(ADDR_SLEEP_DISABLE);
+    command_subcommands(ADDR_SLEEP_DISABLE);
     /* USER CODE END 2 */
 
     /* Init scheduler */
@@ -855,6 +858,7 @@ void bms_main_task(void *argument)
     UNUSED(argument);
 
     uint8_t buffer[8];
+    float   temperature[3] = {0.0f};
 
     /* Infinite loop */
     for (;;)
@@ -862,19 +866,19 @@ void bms_main_task(void *argument)
         /* Send Battery Status */
         // SoC and SoH come from the Fuel Gauge IC. for now estimating SoC based on voltage,
         // SoH is set to 100%
-        uint16_t voltage = BQ769x2_ReadVoltage(ADDR_STACK_VOLTAGE);
+        uint16_t voltage = bq769x2_read_voltage(ADDR_STACK_VOLTAGE);
         if (voltage < MIN_PACK_VOLTAGE_MV)
         {
             voltage = MIN_PACK_VOLTAGE_MV;
         }
 
-        int16_t current = BQ769x2_ReadCurrent() / 10;    // mA -> A -> CAN doc units: (val mA * (1 A / 1000 mA) * (100 units / 1 A)) = val / 10
+        int16_t current = bq769x2_read_current() / 10;    // mA -> A -> CAN doc units: (val mA * (1 A / 1000 mA) * (100 units / 1 A)) = val / 10
 
-        Temperature[0] = BQ769x2_ReadTemperature(0x70);    // TS1Temperature
-        Temperature[1] = BQ769x2_ReadTemperature(0x74);    // TS3Temperature
+        temperature[0] = bq769x2_read_temperature(0x70);    // TS1Temperature
+        temperature[1] = bq769x2_read_temperature(0x74);    // TS3Temperature
         // TS2 not used, third temp sensor is on Fuel Gauge IC
 
-        float temp_avg_f = (Temperature[0] + Temperature[1]) / 2.0f;
+        float temp_avg_f = (temperature[0] + temperature[1]) / 2.0f;
         if (temp_avg_f < -40.0f)
         {
             temp_avg_f = -40.0f;
@@ -899,12 +903,13 @@ void bms_main_task(void *argument)
         can_msg_transmit(CAN_ID_BATTERY_STATUS, (uint8_t *)&buffer, 8, 100u);
 
         /* Send BMS Safety & Alarm Flags */
-        BQ769x2_ReadSafetyStatus();
-        BQ769x2_ReadPFStatus();
-        BQ769x2_Readcell_voltages();
+        bq769x2_read_safety_status();
+        bq769x2_read_pf_status();
+        bq769x2_read_cell_voltages();
+
         uint16_t min_voltage = get_smallest_cell_voltage();
         uint16_t max_voltage = get_largest_cell_voltage();
-        float    max_temp    = Temperature[0] > Temperature[1] ? Temperature[0] : Temperature[1];
+        float    max_temp    = temperature[0] > temperature[1] ? temperature[0] : temperature[1];
         if (max_temp < -40.0f)
         {
             max_temp = -40.0f;
@@ -914,9 +919,9 @@ void bms_main_task(void *argument)
             max_temp = 215.0f;
         }
 
-        uint16_t AlarmBits = BQ769x2_ReadAlarmStatus();
-        uint8_t fuse_ok;
-        if (AlarmBits & 0x0008)
+        uint16_t alarm_bits = bq769x2_read_alarm_status();
+        uint8_t  fuse_ok;
+        if (alarm_bits & 0x0008)
         {
             fuse_ok = 0;    // blown
         }
@@ -944,12 +949,19 @@ void bms_main_task(void *argument)
         buffer[3] = (max_charge_current >> 8) & 0xFF;
         buffer[4] = max_charge_current & 0xFF;
 
-        BQ769x2_ReadFETStatus();
+        bq769x2_read_fet_status();
 
         buffer[5] = get_charging_status();
         buffer[6] = get_bms_status();
         buffer[7] = get_fet_status();
         can_msg_transmit(CAN_ID_BMS_OPERATION, (uint8_t *)&buffer, 8, 100u);
+
+        if (resetear_bms == 1u)
+        {
+            command_subcommands(ADDR_RESET);
+            HAL_Delay(100);
+            bms_init();
+        }
 
         osDelay(pdMS_TO_TICKS(500));
     }

@@ -181,7 +181,7 @@ void can_decode_cmd(can_message_t *msg)
 
             case CAN_ID_BMS_RESET:
                 can_msg_ack(CAN_ID_BMS_RESET, 100u);
-                CommandSubcommands(ADDR_RESET);
+                command_subcommands(ADDR_RESET);
                 osDelay(pdMS_TO_TICKS(10u));
                 HAL_NVIC_SystemReset();
                 break;
@@ -271,7 +271,7 @@ HAL_StatusTypeDef can_msg_ack(uint32_t can_id, uint32_t timeout)
 /* Private user code ---------------------------------------------------------*/
 /**
  * @brief CAN RX FIFO 0 message pending callback.
- * 
+ *
  * @param  hcan pointer to a CAN_HandleTypeDef structure that contains
  *         the configuration information for the specified CAN.
  */
