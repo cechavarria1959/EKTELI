@@ -114,7 +114,7 @@ const osSemaphoreAttr_t semaphore_1_attributes = {
     .name = "semaphore_1"};
 /* USER CODE BEGIN PV */
 
-char opening_msg[] = "\r\n\r\nEKTELI BMS, version 1.0\r\n";
+char opening_msg[] = "\r\n\r\nEKTELI BMS, version 1.1\r\n";
 
 const uint16_t version = 110;    // e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
 
@@ -872,11 +872,6 @@ void bms_main_task(void *argument)
             voltage = MIN_PACK_VOLTAGE_MV;
         }
 
-        /* Reading status */
-        subcommands(DA_CONFIGURATION, 0, 0);
-
-        read_cuv_voltages();
-
         int16_t current = bq769x2_read_current() / 10;    // mA -> A -> CAN doc units: (val mA * (1 A / 1000 mA) * (100 units / 1 A)) = val / 10
 
         temperature[0] = bq769x2_read_temperature(0x70);    // TS1Temperature
@@ -911,13 +906,6 @@ void bms_main_task(void *argument)
         bq769x2_read_safety_status();
         bq769x2_read_pf_status();
         bq769x2_read_cell_voltages();
-        bq769x2_readall_voltages();
-
-        subcommands(CUV_THRESHOLD, 0, 0);
-        subcommands(CUV_DELAY, 0, 0);
-        subcommands(CUV_RECOVERY_HYSTERESIS, 0, 0);
-        subcommands(CUV_THRESHOLD_OVERRIDE, 0, 0);
-        subcommands(FET_OPTIONS, 0, 0);
 
         uint16_t min_voltage = get_smallest_cell_voltage();
         uint16_t max_voltage = get_largest_cell_voltage();

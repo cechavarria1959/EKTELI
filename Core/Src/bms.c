@@ -224,12 +224,21 @@ void command_subcommands(uint16_t command)
     HAL_Delay(2);
 }
 
-void read_cuv_voltages()
+/**
+ * @brief Reads cell voltages captured during a CUV fault event.
+ *
+ * When a Cell Under Voltage (CUV) fault is triggered, a snapshot of all
+ * cell voltages is captured and stored. This function sends the
+ * CUV_SNAPSHOT (0x0080) subcommand to retrieve the saved voltages (mV) at
+ * the moment the fault occurred.
+ */
+void read_cuv_voltages(void)
 {
+    uint16_t cells[16] = {0};
+
     subcommands(ADDR_CUV_SNAPSHOT, 0, 0);
-    volatile uint16_t celdas[16] = {0};
-    memcpy(celdas, rx_32byte, 2);
-    __NOP();
+
+    memcpy(cells, rx_32byte, 2);
 }
 
 /**
@@ -394,21 +403,20 @@ void bq769x2_read_cell_voltages(void)
     cell_voltage[BMS_CELL_COUNT - 1] = bq769x2_read_voltage(cell_addr);
 }
 
+/**
+ * @brief Reads voltages of all 16 cells from BQ769x2 and stores them.
+ */
 void bq769x2_readall_voltages(void)
 {
-    int cellvoltageholder = ADDR_CELL_VOLTAGES;    // Cell1Voltage is 0x14
+    int cell_voltage_holder = ADDR_CELL_VOLTAGES;    // Cell 1 Voltage address is 0x14
 
-    volatile uint16_t allvoltages[16];
+    uint16_t all_voltages[16];
 
     for (int x = 0; x < 16; x++)
     {
-        allvoltages[x] = bq769x2_read_voltage(cellvoltageholder);
-        cellvoltageholder += 2;
+        all_voltages[x] = bq769x2_read_voltage(cell_voltage_holder);
+        cell_voltage_holder += 2;
     }
-
-    UNUSED(allvoltages[0]);
-
-    __NOP();
 }
 
 /**
@@ -436,7 +444,6 @@ int16_t bq769x2_read_current()
 float bq769x2_read_temperature(uint8_t command)
 {
     direct_commands(command, 0x00, R);
-
     return (0.1 * (float)(rx_32byte[1] * 256 + rx_32byte[0])) - 273.15;    // converts from 0.1K to Celcius
 }
 
@@ -496,11 +503,6 @@ void bq769x2_read_safety_status()
     {
         protections_triggered = 0;
     }
-
-    /* Read safety alert statuses */
-    direct_commands(0x02, 0, R);    // safety alert A
-    direct_commands(0x04, 0, R);    // safety alert B
-    direct_commands(0x06, 0, R);    // safety alert C
 }
 
 /**
@@ -529,13 +531,6 @@ void bq769x2_read_pf_status()
     {
         permanent_fault_triggered = 0;
     }
-
-    direct_commands(0x11, 0, R);    // pf status D
-
-    direct_commands(0x0A, 0, R);    // pf alert A
-    direct_commands(0x0C, 0, R);    // pf alert B
-    direct_commands(0x0E, 0, R);    // pf alert C
-    direct_commands(0x10, 0, R);    // pf alert D
 }
 
 /**
@@ -885,10 +880,10 @@ void bms_reset_shutdown(void)
  *
  * @param ptr Pointer to the byte array to be checked.
  * @param len Number of bytes in the array.
+ *
  * @return The calculated checksum as an unsigned char.
  */
 unsigned char checksum(unsigned char *ptr, unsigned char len)
-// The checksum is the inverse of the sum of the bytes.
 {
     unsigned char i;
     unsigned char checksum = 0;
