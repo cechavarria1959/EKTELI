@@ -238,7 +238,10 @@ void read_cuv_voltages(void)
 
     subcommands(ADDR_CUV_SNAPSHOT, 0, 0);
 
-    memcpy(cells, rx_32byte, 2);
+    for (int i = 0; i < 16; i++)
+    {
+        cells[i] = rx_32byte[2 * i] | (rx_32byte[2 * i + 1] << 8);
+    }
 }
 
 /**
