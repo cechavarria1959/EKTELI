@@ -412,12 +412,13 @@ static void MX_CAN1_Init(void)
     }
     /* USER CODE BEGIN CAN1_Init 2 */
 
+    /* Set filter bank to accept IDs 0x100-0x1FF */
     CAN_FilterTypeDef sFilterConfig;
     sFilterConfig.FilterMode           = CAN_FILTERMODE_IDMASK;
     sFilterConfig.FilterScale          = CAN_FILTERSCALE_32BIT;
-    sFilterConfig.FilterIdHigh         = 0x0000;
+    sFilterConfig.FilterIdHigh         = 0x0100 << 5;
     sFilterConfig.FilterIdLow          = 0x0000;
-    sFilterConfig.FilterMaskIdHigh     = 0x0000;
+    sFilterConfig.FilterMaskIdHigh     = 0xFF00 << 5;
     sFilterConfig.FilterMaskIdLow      = 0x0000;
     sFilterConfig.SlaveStartFilterBank = 14;
     sFilterConfig.FilterBank           = 0;
