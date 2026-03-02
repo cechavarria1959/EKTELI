@@ -198,6 +198,11 @@ void enter_sleep_mode(void)
      * the CC1 Current measurement falls below a SLEEP current threshold given by Power:Sleep:Sleep Current, the
      * system is considered in RELAX mode, and the BQ76952 device can autonomously transition into SLEEP mode,
      * depending on the configuration */
+
+    /* Send DEEPSLEEP() twice in a row within 4 seconds */
+    command_subcommands(ADDR_DEEPSLEEP);
+    HAL_Delay(100);    // Short delay to ensure the first command is processed
+    command_subcommands(ADDR_DEEPSLEEP);
     
     /* Put CAN in Sleep Mode (will wake on valid frame) */
     HAL_CAN_RequestSleep(&hcan1);
@@ -227,6 +232,7 @@ void enter_sleep_mode(void)
     HAL_CAN_WakeUp(&hcan1);
 
     //bms: normal mode (exit_deepsleep)
+    command_subcommands(ADDR_EXIT_DEEPSLEEP);
 }
 
 /**
