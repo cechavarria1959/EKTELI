@@ -177,6 +177,68 @@ void transmit_fw_version(void)
     /* Transmit on CAN */
     can_msg_transmit(CAN_ID_BMS_FW_VER, buffer, 6, 100u);
 }
+
+
+void enter_sleep_mode(void)
+{
+    /* 1. Prepare peripherals for sleep */
+    //bms: sleep, deepsleep, shutdown?
+    //answers:
+    //  -sleep: the DSG FET is enabled, the CHG FET can optionally be disabled. the device is operating in a reduced power
+    //          stage to minimize total average current consumption
+    //  -deepsleep: CHG and DSG FETs are disabled, all battery
+    //          protections are disabled, and no current or voltage measurements are taken. The REG1 and REG2 LDOs
+    //          can be kept powered
+    //  -shutdown:  lowest power state of the device, which may be used for shipment or
+    //              long-term storage. All register settings are lost when in SHUTDOWN mode
+
+    /* When
+     * the CC1 Current measurement falls below a SLEEP current threshold given by Power:Sleep:Sleep Current, the
+     * system is considered in RELAX mode, and the BQ76952 device can autonomously transition into SLEEP mode,
+     * depending on the configuration */
+    
+    /* Put CAN in Sleep Mode (will wake on valid frame) */
+    HAL_CAN_RequestSleep(&hcan1);
+    
+    /* Wait until CAN enters sleep */
+    while (HAL_CAN_IsSleepActive(&hcan1) != 1)
+    {
+        /* Timeout could be added here */
+    }
+
+    /* 2. Suspend SysTick to avoid waking from tick interrupt */
+    HAL_SuspendTick();
+
+    /* 3. Enter Stop Mode 2 (lowest power with RAM retention) */
+    /*    MCU will wake on CAN interrupt (EXTI line 25 for CAN1) */
+    HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+
+    /* ---- MCU resumes here after wake-up ---- */
+
+    /* 4. Restore system clock (Stop mode resets to MSI) */
+    SystemClock_Config();
+
+    /* 5. Resume SysTick */
+    HAL_ResumeTick();
+    
+    /* 6. Wake up CAN peripheral */
+    HAL_CAN_WakeUp(&hcan1);
+
+    //bms: normal mode (exit_deepsleep)
+}
+
+/**
+ * @brief CAN Wake-up callback - called when CAN wakes from sleep.
+ * @param hcan Pointer to CAN handle.
+ */
+void HAL_CAN_WakeUpFromRxMsgCallback(CAN_HandleTypeDef *hcan)
+{
+    if (hcan->Instance == CAN1)
+    {
+        /* CAN woke up from valid message on bus */
+        /* The message will be processed in HAL_CAN_RxFifo0MsgPendingCallback */
+    }
+}
 /* USER CODE END 0 */
 
 /**
@@ -431,7 +493,8 @@ static void MX_CAN1_Init(void)
         Error_Handler();
     }
 
-    HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
+    /* Enable CAN interrupts: RX message pending + Wake-up from sleep */
+    HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_WAKEUP);
 
     /* USER CODE END CAN1_Init 2 */
 }
@@ -835,12 +898,24 @@ void can_monitor(void *argument)
     UNUSED(argument);
 
     can_message_t msg;
+
+    uint32_t sleep_counter = 0u;
     for (;;)
     {
+        sleep_counter++;
+
         if (osMessageQueueGet(CANQueueHandle, &msg, NULL, osWaitForever) == osOK)
         {
+            sleep_counter = 0u;
             can_decode_cmd(&msg);
         }
+
+        /* If no CAN messages received for a while, enter sleep mode */
+        if(sleep_counter >= 1000u)
+        {
+            enter_sleep_mode();
+        }
+
         osDelay(pdMS_TO_TICKS(10));
     }
     /* USER CODE END can_monitor */
