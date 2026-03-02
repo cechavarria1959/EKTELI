@@ -43,13 +43,15 @@
 #define MAX_PACK_VOLTAGE_MV  (42000u)    // 4.2V
 #define DIFF_PACK_VOLTAGE_MV (MAX_PACK_VOLTAGE_MV - MIN_PACK_VOLTAGE_MV)
 
+#define TIME_TO_SLEEP_MIN (30u)    // Time of inactivity before entering sleep mode (30 minutes)
+
 #define APPLICATION_ADDRESS (0x08004000u)    // Defined in linker script FLASH ORIGIN
 #define FLASH_LENGTH        (0x0001C000u)    // Defined in linker script FLASH LENGTH
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+#define TIME_TO_SLEEP_MS_FROM_MINUTES (TIME_TO_SLEEP_MIN * 60000u)
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -900,9 +902,15 @@ void can_monitor(void *argument)
     can_message_t msg;
 
     uint32_t sleep_counter = 0u;
+    
+    const uint32_t count_to_sleep_ms = TIME_TO_SLEEP_MS_FROM_MINUTES;
+    assert_param(count_to_sleep_ms <= UINT32_MAX); // ensure it doesn't overflow
+
+    const uint32_t can_monitor_delay_ms = 10u;
+
     for (;;)
     {
-        sleep_counter++;
+        sleep_counter += can_monitor_delay_ms; // increment by 10ms
 
         if (osMessageQueueGet(CANQueueHandle, &msg, NULL, osWaitForever) == osOK)
         {
@@ -911,12 +919,12 @@ void can_monitor(void *argument)
         }
 
         /* If no CAN messages received for a while, enter sleep mode */
-        if(sleep_counter >= 1000u)
+        if(sleep_counter >= count_to_sleep_ms)
         {
             enter_sleep_mode();
         }
 
-        osDelay(pdMS_TO_TICKS(10));
+        osDelay(pdMS_TO_TICKS(can_monitor_delay_ms));
     }
     /* USER CODE END can_monitor */
 }
