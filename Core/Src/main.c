@@ -43,7 +43,7 @@
 #define MAX_PACK_VOLTAGE_MV  (42000u)    // 4.2V
 #define DIFF_PACK_VOLTAGE_MV (MAX_PACK_VOLTAGE_MV - MIN_PACK_VOLTAGE_MV)
 
-#define TIME_TO_SLEEP_MIN (30u)    // Time of inactivity before entering sleep mode (30 minutes)
+#define TIME_TO_SLEEP_MIN (1u)    // Time of inactivity before entering sleep mode (30 minutes)
 
 #define APPLICATION_ADDRESS (0x08004000u)    // Defined in linker script FLASH ORIGIN
 #define FLASH_LENGTH        (0x0001C000u)    // Defined in linker script FLASH LENGTH
@@ -183,6 +183,9 @@ void transmit_fw_version(void)
 
 void enter_sleep_mode(void)
 {
+
+    can_msg_transmit(CAN_ID_BMS, (uint8_t *)"SLEEP\r\n", 7, 100u);
+
     /* 1. Prepare peripherals for sleep */
     //bms: sleep, deepsleep, shutdown?
     //answers:
@@ -220,7 +223,21 @@ void enter_sleep_mode(void)
     /*    MCU will wake on CAN interrupt (EXTI line 25 for CAN1) */
     HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
 
+    /* NOTA CESAR: CAN puede operar en modos Run, Sleep, Low Power Run y Low Power Sleep 
+     *   -sleep: only the CPU is stopped. All peripherals continue to operate and can
+     *           wake up the CPU when an interrupt/event occurs.
+     *   -low power sleep: entered from the low-power run mode. Only the CPU clock is stopped.
+     *           When wakeup is triggered by an event or an interrupt, the system reverts to the low-power run mode.
+     */
+
+    __HAL_FLASH_SLEEP_POWERDOWN_ENABLE();    // Reduce flash power consumption in stop mode
+    SystemClock_Decrease();
+    HAL_SuspendTick();
+    HAL_PWR_EnterSLEEPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+
     /* ---- MCU resumes here after wake-up ---- */
+
+    HAL_PWREx_DisableLowPowerRunMode();
 
     /* 4. Restore system clock (Stop mode resets to MSI) */
     SystemClock_Config();
@@ -246,6 +263,51 @@ void HAL_CAN_WakeUpFromRxMsgCallback(CAN_HandleTypeDef *hcan)
         /* CAN woke up from valid message on bus */
         /* The message will be processed in HAL_CAN_RxFifo0MsgPendingCallback */
     }
+}
+
+/**
+  * @brief  System Clock Speed decrease
+  *         The system Clock source is shifted from HSI to MSI
+  *         while at the same time, MSI range is set to RCC_MSIRANGE_0
+  *         to go down to 100 KHz     
+  * @param  None
+  * @retval None
+  */
+void SystemClock_Decrease(void)
+{
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+
+  /* MSI is enabled after System reset, activate PLL with MSI as source */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.HSEState = RCC_HSE_OFF;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_0;
+  RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    /* Initialization Error */
+    Error_Handler();
+  }
+  
+  /* Select MSI as system clock source and configure the HCLK, PCLK1 and PCLK2 
+     clocks dividers */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_SYSCLK;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI; 
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;  
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  if(HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  {
+    /* Initialization Error */
+    Error_Handler();
+  }
+  
+  /* Disable HSI to reduce power consumption since MSI is used from that point */
+  __HAL_RCC_HSI_DISABLE();
+  
 }
 /* USER CODE END 0 */
 
