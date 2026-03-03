@@ -141,7 +141,8 @@ void        can_monitor(void *argument);
 void        bms_main_task(void *argument);
 
 /* USER CODE BEGIN PFP */
-
+void enter_sleep_mode(void);
+void SystemClock_Decrease(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -183,19 +184,18 @@ void transmit_fw_version(void)
 
 void enter_sleep_mode(void)
 {
-
     can_msg_transmit(CAN_ID_BMS, (uint8_t *)"SLEEP\r\n", 7, 100u);
 
     /* 1. Prepare peripherals for sleep */
-    //bms: sleep, deepsleep, shutdown?
-    //answers:
-    //  -sleep: the DSG FET is enabled, the CHG FET can optionally be disabled. the device is operating in a reduced power
-    //          stage to minimize total average current consumption
-    //  -deepsleep: CHG and DSG FETs are disabled, all battery
-    //          protections are disabled, and no current or voltage measurements are taken. The REG1 and REG2 LDOs
-    //          can be kept powered
-    //  -shutdown:  lowest power state of the device, which may be used for shipment or
-    //              long-term storage. All register settings are lost when in SHUTDOWN mode
+    // bms: sleep, deepsleep, shutdown?
+    // answers:
+    //   -sleep: the DSG FET is enabled, the CHG FET can optionally be disabled. the device is operating in a reduced power
+    //           stage to minimize total average current consumption
+    //   -deepsleep: CHG and DSG FETs are disabled, all battery
+    //           protections are disabled, and no current or voltage measurements are taken. The REG1 and REG2 LDOs
+    //           can be kept powered
+    //   -shutdown:  lowest power state of the device, which may be used for shipment or
+    //               long-term storage. All register settings are lost when in SHUTDOWN mode
 
     /* When
      * the CC1 Current measurement falls below a SLEEP current threshold given by Power:Sleep:Sleep Current, the
@@ -266,48 +266,50 @@ void HAL_CAN_WakeUpFromRxMsgCallback(CAN_HandleTypeDef *hcan)
 }
 
 /**
-  * @brief  System Clock Speed decrease
-  *         The system Clock source is shifted from HSI to MSI
-  *         while at the same time, MSI range is set to RCC_MSIRANGE_0
-  *         to go down to 100 KHz     
-  * @param  None
-  * @retval None
-  */
+ * @brief  System Clock Speed decrease
+ *         The system Clock source is shifted from HSI to MSI
+ *         while at the same time, MSI range is set to RCC_MSIRANGE_0
+ *         to go down to 100 KHz
+ * @param  None
+ * @retval None
+ */
 void SystemClock_Decrease(void)
 {
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
 
-  /* MSI is enabled after System reset, activate PLL with MSI as source */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
-  RCC_OscInitStruct.HSEState = RCC_HSE_OFF;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_0;
-  RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-  if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    /* Initialization Error */
-    Error_Handler();
-  }
-  
-  /* Select MSI as system clock source and configure the HCLK, PCLK1 and PCLK2 
-     clocks dividers */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_SYSCLK;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI; 
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;  
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-  if(HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
-  {
-    /* Initialization Error */
-    Error_Handler();
-  }
-  
-  /* Disable HSI to reduce power consumption since MSI is used from that point */
-  __HAL_RCC_HSI_DISABLE();
-  
+    /* MSI is enabled after System reset, activate PLL with MSI as source */
+    RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_MSI;
+    RCC_OscInitStruct.HSEState            = RCC_HSE_OFF;
+    RCC_OscInitStruct.HSIState            = RCC_HSI_ON;
+    RCC_OscInitStruct.MSIState            = RCC_MSI_ON;
+    RCC_OscInitStruct.MSIClockRange       = RCC_MSIRANGE_0;
+    RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+    RCC_OscInitStruct.PLL.PLLState        = RCC_PLL_NONE;
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+    {
+        /* Initialization Error */
+        Error_Handler();
+    }
+
+    /* Select MSI as system clock source and configure the HCLK, PCLK1 and PCLK2
+       clocks dividers */
+    RCC_ClkInitStruct.ClockType      = RCC_CLOCKTYPE_SYSCLK;
+    RCC_ClkInitStruct.SYSCLKSource   = RCC_SYSCLKSOURCE_MSI;
+    RCC_ClkInitStruct.AHBCLKDivider  = RCC_SYSCLK_DIV1;
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+    {
+        /* Initialization Error */
+        Error_Handler();
+    }
+
+    volatile uint32_t hclk_freq   = HAL_RCC_GetHCLKFreq();
+    volatile uint32_t sysclk_freq = HAL_RCC_GetSysClockFreq();
+
+    /* Disable HSI to reduce power consumption since MSI is used from that point */
+    __HAL_RCC_HSI_DISABLE();
 }
 /* USER CODE END 0 */
 
@@ -975,24 +977,28 @@ void can_monitor(void *argument)
     assert_param(count_to_sleep_ms <= UINT32_MAX); // ensure it doesn't overflow
 
     const uint32_t can_monitor_delay_ms = 10u;
+    osStatus_t     status;
 
     for (;;)
     {
-        sleep_counter += can_monitor_delay_ms; // increment by 10ms
+        status = osMessageQueueGet(CANQueueHandle, &msg, NULL, can_monitor_delay_ms);
 
-        if (osMessageQueueGet(CANQueueHandle, &msg, NULL, osWaitForever) == osOK)
+        if (status == osOK)
         {
             sleep_counter = 0u;
             can_decode_cmd(&msg);
         }
 
+        sleep_counter += can_monitor_delay_ms;    // increment by 10ms
+
         /* If no CAN messages received for a while, enter sleep mode */
-        if(sleep_counter >= count_to_sleep_ms)
+        if (sleep_counter >= count_to_sleep_ms)
         {
+            sleep_counter = 0u;
             enter_sleep_mode();
         }
 
-        osDelay(pdMS_TO_TICKS(can_monitor_delay_ms));
+        //        osDelay(pdMS_TO_TICKS(can_monitor_delay_ms));
     }
     /* USER CODE END can_monitor */
 }
