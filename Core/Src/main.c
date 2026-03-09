@@ -209,14 +209,6 @@ void enter_sleep_mode(void)
      * system is considered in RELAX mode, and the BQ76952 device can autonomously transition into SLEEP mode,
      * depending on the configuration */
 
-    /* Send DEEPSLEEP() twice in a row within 4 seconds */
-    // command_subcommands(ADDR_DEEPSLEEP);
-    // HAL_Delay(100);    // Short delay to ensure the first command is processed
-    // command_subcommands(ADDR_DEEPSLEEP);
-
-    /* 2. Suspend SysTick to avoid waking from tick interrupt */
-    //    HAL_SuspendTick();
-
     /* 3. Enter Stop Mode 2 (lowest power with RAM retention) */
     /*    MCU will wake on CAN interrupt (EXTI line 25 for CAN1) */
     //    HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
@@ -228,11 +220,19 @@ void enter_sleep_mode(void)
      *           When wakeup is triggered by an event or an interrupt, the system reverts to the low-power run mode.
      */
 
+
+    /* Suspend SysTick to avoid waking from tick interrupt */
     __HAL_FLASH_SLEEP_POWERDOWN_ENABLE();
     osKernelLock();
     HAL_SuspendTick();
     SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
+
+    /* Send DEEPSLEEP() twice in a row within 4 seconds */
+    // command_subcommands(ADDR_DEEPSLEEP);
+    // HAL_Delay(100);    // Short delay to ensure the first command is processed
+    // command_subcommands(ADDR_DEEPSLEEP);
     
+    /* Reduce clock and prepare CAN for low-frequency HCLK operation */
     SystemClock_Decrease();
 
     HAL_CAN_Stop(&hcan1);
@@ -241,28 +241,29 @@ void enter_sleep_mode(void)
 
     HAL_CAN_Start(&hcan1);
 
+    /* Enter Sleep Mode */
     HAL_PWR_EnterSLEEPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 
     /* ---- MCU resumes here after wake-up ---- */
 
+    /* Restore normal run mode, sysclock, CAN peripheral, and systick */
     HAL_PWREx_DisableLowPowerRunMode();
+    
+    /* 4. Restore system clock (Stop mode resets to MSI) */
+    SystemClock_Config();
 
     HAL_CAN_Stop(&hcan1);
 
     adjust_can_clock(SRC_HIGH_FREQ_CLK);
 
     HAL_CAN_Start(&hcan1);
-    
-    /* 4. Restore system clock (Stop mode resets to MSI) */
-    SystemClock_Config();
-    
-    /* 5. Resume SysTick */
+
     SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
     HAL_ResumeTick();
     osKernelUnlock();
 
-    // bms: normal mode (exit_deepsleep)
-    //        command_subcommands(ADDR_EXIT_DEEPSLEEP);
+    /* bms: normal mode (exit_deepsleep) */
+    // command_subcommands(ADDR_EXIT_DEEPSLEEP);
 }
 
 /**
