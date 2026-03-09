@@ -123,6 +123,12 @@ const uint16_t version = 110;    // e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
 // for debugging purposes
 volatile uint8_t resetear_bms = 0;    // Set to 1 to reset the BMS by sending the reset command in the main loop
 
+typedef enum
+{
+    SRC_LOW_FREQ_CLK  = 0,
+    SRC_HIGH_FREQ_CLK = 1
+} can_clock_freq_t;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -143,6 +149,7 @@ void        bms_main_task(void *argument);
 /* USER CODE BEGIN PFP */
 void enter_sleep_mode(void);
 void SystemClock_Decrease(void);
+void adjust_can_clock(can_clock_freq_t freq);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -203,18 +210,9 @@ void enter_sleep_mode(void)
      * depending on the configuration */
 
     /* Send DEEPSLEEP() twice in a row within 4 seconds */
-        // command_subcommands(ADDR_DEEPSLEEP);
-        // HAL_Delay(100);    // Short delay to ensure the first command is processed
-        // command_subcommands(ADDR_DEEPSLEEP);
-
-    /* Put CAN in Sleep Mode (will wake on valid frame) */
-        // HAL_CAN_RequestSleep(&hcan1);
-
-    /* Wait until CAN enters sleep */
-//        while (HAL_CAN_IsSleepActive(&hcan1) != 1)
-//        {
-//            /* Timeout could be added here */
-//        }
+    // command_subcommands(ADDR_DEEPSLEEP);
+    // HAL_Delay(100);    // Short delay to ensure the first command is processed
+    // command_subcommands(ADDR_DEEPSLEEP);
 
     /* 2. Suspend SysTick to avoid waking from tick interrupt */
     //    HAL_SuspendTick();
@@ -230,52 +228,18 @@ void enter_sleep_mode(void)
      *           When wakeup is triggered by an event or an interrupt, the system reverts to the low-power run mode.
      */
 
-    volatile uint32_t hclk_freq   = HAL_RCC_GetHCLKFreq();
-    volatile uint32_t sysclk_freq = HAL_RCC_GetSysClockFreq();
-
-    __HAL_FLASH_SLEEP_POWERDOWN_ENABLE();    // Reduce flash power consumption in stop mode
-    SystemClock_Decrease();
+    __HAL_FLASH_SLEEP_POWERDOWN_ENABLE();
     osKernelLock();
     HAL_SuspendTick();
-
     SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
+    
+    SystemClock_Decrease();
 
     HAL_CAN_Stop(&hcan1);
-//    adjust_can_clock();
 
-    hcan1.Instance                  = CAN1;
-    hcan1.Init.Prescaler            = 1;
-    hcan1.Init.Mode                 = CAN_MODE_NORMAL;
-    hcan1.Init.SyncJumpWidth        = CAN_SJW_1TQ;
-    hcan1.Init.TimeSeg1             = CAN_BS1_2TQ;
-    hcan1.Init.TimeSeg2             = CAN_BS2_1TQ;
-    hcan1.Init.TimeTriggeredMode    = DISABLE;
-    hcan1.Init.AutoBusOff           = ENABLE;
-    hcan1.Init.AutoWakeUp           = ENABLE;
-    hcan1.Init.AutoRetransmission   = ENABLE;
-    hcan1.Init.ReceiveFifoLocked    = DISABLE;
-    hcan1.Init.TransmitFifoPriority = ENABLE;
-//    if (HAL_CAN_Init(&hcan1) != HAL_OK)
-//    {
-//        Error_Handler();
-//    }
-
-    WRITE_REG(hcan1.Instance->BTR, (uint32_t)(hcan1.Init.Mode           |
-            hcan1.Init.SyncJumpWidth  |
-            hcan1.Init.TimeSeg1       |
-            hcan1.Init.TimeSeg2       |
-                                              (hcan1.Init.Prescaler - 1U)));
+    adjust_can_clock(SRC_LOW_FREQ_CLK);
 
     HAL_CAN_Start(&hcan1);
-
-//    volatile uint32_t timticks = osKernelSuspend();
-
-//    volatile int32_t locknum = osKernelLock();
-
-
-
-    hclk_freq   = HAL_RCC_GetHCLKFreq();
-    sysclk_freq = HAL_RCC_GetSysClockFreq();
 
     HAL_PWR_EnterSLEEPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 
@@ -284,64 +248,21 @@ void enter_sleep_mode(void)
     HAL_PWREx_DisableLowPowerRunMode();
 
     HAL_CAN_Stop(&hcan1);
-//    adjust_can_clock();
 
-    hcan1.Instance                  = CAN1;
-    hcan1.Init.Prescaler            = 8;
-    hcan1.Init.Mode                 = CAN_MODE_NORMAL;
-    hcan1.Init.SyncJumpWidth        = CAN_SJW_1TQ;
-    hcan1.Init.TimeSeg1             = CAN_BS1_14TQ;
-    hcan1.Init.TimeSeg2             = CAN_BS2_5TQ;
-    hcan1.Init.TimeTriggeredMode    = DISABLE;
-    hcan1.Init.AutoBusOff           = ENABLE;
-    hcan1.Init.AutoWakeUp           = ENABLE;
-    hcan1.Init.AutoRetransmission   = ENABLE;
-    hcan1.Init.ReceiveFifoLocked    = DISABLE;
-    hcan1.Init.TransmitFifoPriority = ENABLE;
-//    if (HAL_CAN_Init(&hcan1) != HAL_OK)
-//    {
-//        Error_Handler();
-//    }
-
-    WRITE_REG(hcan1.Instance->BTR, (uint32_t)(hcan1.Init.Mode           |
-            hcan1.Init.SyncJumpWidth  |
-            hcan1.Init.TimeSeg1       |
-            hcan1.Init.TimeSeg2       |
-                                              (hcan1.Init.Prescaler - 1U)));
+    adjust_can_clock(SRC_HIGH_FREQ_CLK);
 
     HAL_CAN_Start(&hcan1);
-
-    SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
-
+    
     /* 4. Restore system clock (Stop mode resets to MSI) */
     SystemClock_Config();
-
-//    osKernelUnlock();
-
+    
     /* 5. Resume SysTick */
+    SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
     HAL_ResumeTick();
     osKernelUnlock();
-    hclk_freq   = HAL_RCC_GetHCLKFreq();
-    sysclk_freq = HAL_RCC_GetSysClockFreq();
-
-    /* 6. Wake up CAN peripheral */
-    //    HAL_CAN_WakeUp(&hcan1);
 
     // bms: normal mode (exit_deepsleep)
-//        command_subcommands(ADDR_EXIT_DEEPSLEEP);
-}
-
-/**
- * @brief CAN Wake-up callback - called when CAN wakes from sleep.
- * @param hcan Pointer to CAN handle.
- */
-void HAL_CAN_WakeUpFromRxMsgCallback(CAN_HandleTypeDef *hcan)
-{
-    if (hcan->Instance == CAN1)
-    {
-        /* CAN woke up from valid message on bus */
-        /* The message will be processed in HAL_CAN_RxFifo0MsgPendingCallback */
-    }
+    //        command_subcommands(ADDR_EXIT_DEEPSLEEP);
 }
 
 /**
@@ -386,6 +307,27 @@ void SystemClock_Decrease(void)
 
     /* Disable HSI to reduce power consumption since MSI is used from that point */
     __HAL_RCC_HSI_DISABLE();
+}
+
+void adjust_can_clock(can_clock_freq_t freq)
+{
+    hcan1.Init.Mode          = CAN_MODE_NORMAL;
+    hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
+
+    if (freq == SRC_LOW_FREQ_CLK)
+    {
+        hcan1.Init.Prescaler = 1;
+        hcan1.Init.TimeSeg1  = CAN_BS1_2TQ;
+        hcan1.Init.TimeSeg2  = CAN_BS2_1TQ;
+    }
+    else
+    {
+        hcan1.Init.Prescaler = 8;
+        hcan1.Init.TimeSeg1  = CAN_BS1_14TQ;
+        hcan1.Init.TimeSeg2  = CAN_BS2_5TQ;
+    }
+
+    WRITE_REG(hcan1.Instance->BTR, (uint32_t)(hcan1.Init.Mode | hcan1.Init.SyncJumpWidth | hcan1.Init.TimeSeg1 | hcan1.Init.TimeSeg2 | (hcan1.Init.Prescaler - 1U)));
 }
 /* USER CODE END 0 */
 
@@ -641,8 +583,8 @@ static void MX_CAN1_Init(void)
         Error_Handler();
     }
 
-    /* Enable CAN interrupts: RX message pending + Wake-up from sleep */
-    HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);// | CAN_IT_WAKEUP);
+    /* Enable CAN interrupts */
+    HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 
     /* USER CODE END CAN1_Init 2 */
 }
@@ -1049,7 +991,7 @@ void can_monitor(void *argument)
 
     uint32_t sleep_counter = 0u;
 
-    const uint32_t count_to_sleep_ms = 1000;//TIME_TO_SLEEP_MS_FROM_MINUTES;
+    const uint32_t count_to_sleep_ms = TIME_TO_SLEEP_MS_FROM_MINUTES;
     assert_param(count_to_sleep_ms <= UINT32_MAX);    // ensure it doesn't overflow
 
     const uint32_t can_monitor_delay_ms = 10u;
