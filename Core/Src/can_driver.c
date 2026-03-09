@@ -99,7 +99,7 @@ void can_transmit_status(uint8_t soc, uint8_t soh, uint16_t voltage, int16_t cur
  */
 HAL_StatusTypeDef can_msg_transmit(uint32_t can_id, uint8_t *pdata, uint32_t length, uint32_t timeout)
 {
-    CAN_TxHeaderTypeDef tx_header;
+    CAN_TxHeaderTypeDef tx_header = {0};
     uint8_t             tx_data[8];
     uint32_t            tx_mailbox;
 
@@ -238,7 +238,7 @@ void can_decode_cmd(can_message_t *msg)
  */
 HAL_StatusTypeDef can_msg_ack(uint32_t can_id, uint32_t timeout)
 {
-    CAN_TxHeaderTypeDef tx_header;
+    CAN_TxHeaderTypeDef tx_header = {0};
     uint8_t             tx_data[8];
     uint32_t            tx_mailbox;
 

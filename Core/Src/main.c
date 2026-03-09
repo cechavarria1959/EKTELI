@@ -203,53 +203,132 @@ void enter_sleep_mode(void)
      * depending on the configuration */
 
     /* Send DEEPSLEEP() twice in a row within 4 seconds */
-    command_subcommands(ADDR_DEEPSLEEP);
-    HAL_Delay(100);    // Short delay to ensure the first command is processed
-    command_subcommands(ADDR_DEEPSLEEP);
-    
+        // command_subcommands(ADDR_DEEPSLEEP);
+        // HAL_Delay(100);    // Short delay to ensure the first command is processed
+        // command_subcommands(ADDR_DEEPSLEEP);
+
     /* Put CAN in Sleep Mode (will wake on valid frame) */
-    HAL_CAN_RequestSleep(&hcan1);
-    
+        // HAL_CAN_RequestSleep(&hcan1);
+
     /* Wait until CAN enters sleep */
-    while (HAL_CAN_IsSleepActive(&hcan1) != 1)
-    {
-        /* Timeout could be added here */
-    }
+//        while (HAL_CAN_IsSleepActive(&hcan1) != 1)
+//        {
+//            /* Timeout could be added here */
+//        }
 
     /* 2. Suspend SysTick to avoid waking from tick interrupt */
-    HAL_SuspendTick();
+    //    HAL_SuspendTick();
 
     /* 3. Enter Stop Mode 2 (lowest power with RAM retention) */
     /*    MCU will wake on CAN interrupt (EXTI line 25 for CAN1) */
-    HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+    //    HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
 
-    /* NOTA CESAR: CAN puede operar en modos Run, Sleep, Low Power Run y Low Power Sleep 
+    /* NOTA CESAR: CAN puede operar en modos Run, Sleep, Low Power Run y Low Power Sleep
      *   -sleep: only the CPU is stopped. All peripherals continue to operate and can
      *           wake up the CPU when an interrupt/event occurs.
      *   -low power sleep: entered from the low-power run mode. Only the CPU clock is stopped.
      *           When wakeup is triggered by an event or an interrupt, the system reverts to the low-power run mode.
      */
 
+    volatile uint32_t hclk_freq   = HAL_RCC_GetHCLKFreq();
+    volatile uint32_t sysclk_freq = HAL_RCC_GetSysClockFreq();
+
     __HAL_FLASH_SLEEP_POWERDOWN_ENABLE();    // Reduce flash power consumption in stop mode
     SystemClock_Decrease();
+    osKernelLock();
     HAL_SuspendTick();
+
+    SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
+
+    HAL_CAN_Stop(&hcan1);
+//    adjust_can_clock();
+
+    hcan1.Instance                  = CAN1;
+    hcan1.Init.Prescaler            = 1;
+    hcan1.Init.Mode                 = CAN_MODE_NORMAL;
+    hcan1.Init.SyncJumpWidth        = CAN_SJW_1TQ;
+    hcan1.Init.TimeSeg1             = CAN_BS1_2TQ;
+    hcan1.Init.TimeSeg2             = CAN_BS2_1TQ;
+    hcan1.Init.TimeTriggeredMode    = DISABLE;
+    hcan1.Init.AutoBusOff           = ENABLE;
+    hcan1.Init.AutoWakeUp           = ENABLE;
+    hcan1.Init.AutoRetransmission   = ENABLE;
+    hcan1.Init.ReceiveFifoLocked    = DISABLE;
+    hcan1.Init.TransmitFifoPriority = ENABLE;
+//    if (HAL_CAN_Init(&hcan1) != HAL_OK)
+//    {
+//        Error_Handler();
+//    }
+
+    WRITE_REG(hcan1.Instance->BTR, (uint32_t)(hcan1.Init.Mode           |
+            hcan1.Init.SyncJumpWidth  |
+            hcan1.Init.TimeSeg1       |
+            hcan1.Init.TimeSeg2       |
+                                              (hcan1.Init.Prescaler - 1U)));
+
+    HAL_CAN_Start(&hcan1);
+
+//    volatile uint32_t timticks = osKernelSuspend();
+
+//    volatile int32_t locknum = osKernelLock();
+
+
+
+    hclk_freq   = HAL_RCC_GetHCLKFreq();
+    sysclk_freq = HAL_RCC_GetSysClockFreq();
+
     HAL_PWR_EnterSLEEPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 
     /* ---- MCU resumes here after wake-up ---- */
 
     HAL_PWREx_DisableLowPowerRunMode();
 
+    HAL_CAN_Stop(&hcan1);
+//    adjust_can_clock();
+
+    hcan1.Instance                  = CAN1;
+    hcan1.Init.Prescaler            = 8;
+    hcan1.Init.Mode                 = CAN_MODE_NORMAL;
+    hcan1.Init.SyncJumpWidth        = CAN_SJW_1TQ;
+    hcan1.Init.TimeSeg1             = CAN_BS1_14TQ;
+    hcan1.Init.TimeSeg2             = CAN_BS2_5TQ;
+    hcan1.Init.TimeTriggeredMode    = DISABLE;
+    hcan1.Init.AutoBusOff           = ENABLE;
+    hcan1.Init.AutoWakeUp           = ENABLE;
+    hcan1.Init.AutoRetransmission   = ENABLE;
+    hcan1.Init.ReceiveFifoLocked    = DISABLE;
+    hcan1.Init.TransmitFifoPriority = ENABLE;
+//    if (HAL_CAN_Init(&hcan1) != HAL_OK)
+//    {
+//        Error_Handler();
+//    }
+
+    WRITE_REG(hcan1.Instance->BTR, (uint32_t)(hcan1.Init.Mode           |
+            hcan1.Init.SyncJumpWidth  |
+            hcan1.Init.TimeSeg1       |
+            hcan1.Init.TimeSeg2       |
+                                              (hcan1.Init.Prescaler - 1U)));
+
+    HAL_CAN_Start(&hcan1);
+
+    SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
+
     /* 4. Restore system clock (Stop mode resets to MSI) */
     SystemClock_Config();
 
+//    osKernelUnlock();
+
     /* 5. Resume SysTick */
     HAL_ResumeTick();
-    
-    /* 6. Wake up CAN peripheral */
-    HAL_CAN_WakeUp(&hcan1);
+    osKernelUnlock();
+    hclk_freq   = HAL_RCC_GetHCLKFreq();
+    sysclk_freq = HAL_RCC_GetSysClockFreq();
 
-    //bms: normal mode (exit_deepsleep)
-    command_subcommands(ADDR_EXIT_DEEPSLEEP);
+    /* 6. Wake up CAN peripheral */
+    //    HAL_CAN_WakeUp(&hcan1);
+
+    // bms: normal mode (exit_deepsleep)
+//        command_subcommands(ADDR_EXIT_DEEPSLEEP);
 }
 
 /**
@@ -268,8 +347,8 @@ void HAL_CAN_WakeUpFromRxMsgCallback(CAN_HandleTypeDef *hcan)
 /**
  * @brief  System Clock Speed decrease
  *         The system Clock source is shifted from HSI to MSI
- *         while at the same time, MSI range is set to RCC_MSIRANGE_0
- *         to go down to 100 KHz
+ *         while at the same time, MSI range is set to RCC_MSIRANGE_5
+ *         to go down to 2000 KHz
  * @param  None
  * @retval None
  */
@@ -283,7 +362,7 @@ void SystemClock_Decrease(void)
     RCC_OscInitStruct.HSEState            = RCC_HSE_OFF;
     RCC_OscInitStruct.HSIState            = RCC_HSI_ON;
     RCC_OscInitStruct.MSIState            = RCC_MSI_ON;
-    RCC_OscInitStruct.MSIClockRange       = RCC_MSIRANGE_0;
+    RCC_OscInitStruct.MSIClockRange       = RCC_CR_MSIRANGE_5;
     RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
     RCC_OscInitStruct.PLL.PLLState        = RCC_PLL_NONE;
     if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -304,9 +383,6 @@ void SystemClock_Decrease(void)
         /* Initialization Error */
         Error_Handler();
     }
-
-    volatile uint32_t hclk_freq   = HAL_RCC_GetHCLKFreq();
-    volatile uint32_t sysclk_freq = HAL_RCC_GetSysClockFreq();
 
     /* Disable HSI to reduce power consumption since MSI is used from that point */
     __HAL_RCC_HSI_DISABLE();
@@ -566,7 +642,7 @@ static void MX_CAN1_Init(void)
     }
 
     /* Enable CAN interrupts: RX message pending + Wake-up from sleep */
-    HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_WAKEUP);
+    HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);// | CAN_IT_WAKEUP);
 
     /* USER CODE END CAN1_Init 2 */
 }
@@ -972,9 +1048,9 @@ void can_monitor(void *argument)
     can_message_t msg;
 
     uint32_t sleep_counter = 0u;
-    
-    const uint32_t count_to_sleep_ms = TIME_TO_SLEEP_MS_FROM_MINUTES;
-    assert_param(count_to_sleep_ms <= UINT32_MAX); // ensure it doesn't overflow
+
+    const uint32_t count_to_sleep_ms = 1000;//TIME_TO_SLEEP_MS_FROM_MINUTES;
+    assert_param(count_to_sleep_ms <= UINT32_MAX);    // ensure it doesn't overflow
 
     const uint32_t can_monitor_delay_ms = 10u;
     osStatus_t     status;
