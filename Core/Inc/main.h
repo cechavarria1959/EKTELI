@@ -52,7 +52,8 @@ extern "C"
 
     /* Exported macro ------------------------------------------------------------*/
     /* USER CODE BEGIN EM */
-
+#define FW_UPDATE_BYTE_SEQUENCE_1 (0x5555AAAA)
+#define FW_UPDATE_BYTE_SEQUENCE_2 (0xAAAA5555)
     /* USER CODE END EM */
 
     /* Exported functions prototypes ---------------------------------------------*/

@@ -43,13 +43,15 @@
 #define MAX_PACK_VOLTAGE_MV  (42000u)    // 4.2V
 #define DIFF_PACK_VOLTAGE_MV (MAX_PACK_VOLTAGE_MV - MIN_PACK_VOLTAGE_MV)
 
+#define TIME_TO_SLEEP_MIN (1u)    // Time of inactivity before entering sleep mode (30 minutes)
+
 #define APPLICATION_ADDRESS (0x08004000u)    // Defined in linker script FLASH ORIGIN
 #define FLASH_LENGTH        (0x0001C000u)    // Defined in linker script FLASH LENGTH
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+#define TIME_TO_SLEEP_MS_FROM_MINUTES (TIME_TO_SLEEP_MIN * 60000u)
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -121,6 +123,12 @@ const uint16_t version = 110;    // e.g: ver 1.0.0 -> 100, ver 1.1.0 -> 110
 // for debugging purposes
 volatile uint8_t resetear_bms = 0;    // Set to 1 to reset the BMS by sending the reset command in the main loop
 
+typedef enum
+{
+    SRC_LOW_FREQ_CLK  = 0,
+    SRC_HIGH_FREQ_CLK = 1
+} can_clock_freq_t;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -139,7 +147,9 @@ void        can_monitor(void *argument);
 void        bms_main_task(void *argument);
 
 /* USER CODE BEGIN PFP */
-
+void enter_sleep_mode(void);
+void SystemClock_Decrease(void);
+void adjust_can_clock(can_clock_freq_t freq);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -176,6 +186,158 @@ void transmit_fw_version(void)
 
     /* Transmit on CAN */
     can_msg_transmit(CAN_ID_BMS_FW_VER, buffer, 6, 100u);
+
+    if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) == FW_UPDATE_BYTE_SEQUENCE_1 &&
+        HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) == FW_UPDATE_BYTE_SEQUENCE_2)
+    {
+        /* Reset backup registers */
+        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0x00000000);
+        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0x00000000);
+    }
+}
+
+
+void enter_sleep_mode(void)
+{
+    can_msg_transmit(CAN_ID_BMS, (uint8_t *)"SLEEP\r\n", 7, 100u);
+
+    /* 1. Prepare peripherals for sleep */
+    // bms: sleep, deepsleep, shutdown?
+    // answers:
+    //   -sleep: the DSG FET is enabled, the CHG FET can optionally be disabled. the device is operating in a reduced power
+    //           stage to minimize total average current consumption
+    //   -deepsleep: CHG and DSG FETs are disabled, all battery
+    //           protections are disabled, and no current or voltage measurements are taken. The REG1 and REG2 LDOs
+    //           can be kept powered
+    //   -shutdown:  lowest power state of the device, which may be used for shipment or
+    //               long-term storage. All register settings are lost when in SHUTDOWN mode
+
+    /* When
+     * the CC1 Current measurement falls below a SLEEP current threshold given by Power:Sleep:Sleep Current, the
+     * system is considered in RELAX mode, and the BQ76952 device can autonomously transition into SLEEP mode,
+     * depending on the configuration */
+
+    /* 3. Enter Stop Mode 2 (lowest power with RAM retention) */
+    /*    MCU will wake on CAN interrupt (EXTI line 25 for CAN1) */
+    //    HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+
+    /* NOTA CESAR: CAN puede operar en modos Run, Sleep, Low Power Run y Low Power Sleep
+     *   -sleep: only the CPU is stopped. All peripherals continue to operate and can
+     *           wake up the CPU when an interrupt/event occurs.
+     *   -low power sleep: entered from the low-power run mode. Only the CPU clock is stopped.
+     *           When wakeup is triggered by an event or an interrupt, the system reverts to the low-power run mode.
+     */
+
+
+    /* Suspend SysTick to avoid waking from tick interrupt */
+    __HAL_FLASH_SLEEP_POWERDOWN_ENABLE();
+    osKernelLock();
+    SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
+
+    /* Send DEEPSLEEP() twice in a row within 4 seconds */
+    command_subcommands(ADDR_DEEPSLEEP);
+    HAL_Delay(10);    // Short delay to ensure the first command is processed
+    command_subcommands(ADDR_DEEPSLEEP);
+
+    /* Reduce clock and prepare CAN for low-frequency HCLK operation */
+    SystemClock_Decrease();
+
+    HAL_SuspendTick();
+
+    HAL_CAN_Stop(&hcan1);
+
+    adjust_can_clock(SRC_LOW_FREQ_CLK);
+
+    HAL_CAN_Start(&hcan1);
+
+    /* Enter Sleep Mode */
+    HAL_PWR_EnterSLEEPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+
+    /* ---- MCU resumes here after wake-up ---- */
+
+    /* Restore normal run mode, sysclock, CAN peripheral, and systick */
+    HAL_PWREx_DisableLowPowerRunMode();
+
+    /* 4. Restore system clock (Stop mode resets to MSI) */
+    SystemClock_Config();
+
+    HAL_CAN_Stop(&hcan1);
+
+    adjust_can_clock(SRC_HIGH_FREQ_CLK);
+
+    HAL_CAN_Start(&hcan1);
+
+    SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
+    HAL_ResumeTick();
+    osKernelUnlock();
+
+    /* bms: normal mode (exit_deepsleep) */
+    command_subcommands(ADDR_EXIT_DEEPSLEEP);
+}
+
+/**
+ * @brief  System Clock Speed decrease
+ *         The system Clock source is shifted from HSI to MSI
+ *         while at the same time, MSI range is set to RCC_MSIRANGE_5
+ *         to go down to 2000 KHz
+ * @param  None
+ * @retval None
+ */
+void SystemClock_Decrease(void)
+{
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+
+    /* MSI is enabled after System reset, activate PLL with MSI as source */
+    RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_MSI;
+    RCC_OscInitStruct.HSEState            = RCC_HSE_OFF;
+    RCC_OscInitStruct.HSIState            = RCC_HSI_ON;
+    RCC_OscInitStruct.MSIState            = RCC_MSI_ON;
+    RCC_OscInitStruct.MSIClockRange       = RCC_CR_MSIRANGE_5;
+    RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+    RCC_OscInitStruct.PLL.PLLState        = RCC_PLL_NONE;
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+    {
+        /* Initialization Error */
+        Error_Handler();
+    }
+
+    /* Select MSI as system clock source and configure the HCLK, PCLK1 and PCLK2
+       clocks dividers */
+    RCC_ClkInitStruct.ClockType      = RCC_CLOCKTYPE_SYSCLK;
+    RCC_ClkInitStruct.SYSCLKSource   = RCC_SYSCLKSOURCE_MSI;
+    RCC_ClkInitStruct.AHBCLKDivider  = RCC_SYSCLK_DIV1;
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+    {
+        /* Initialization Error */
+        Error_Handler();
+    }
+
+    /* Disable HSI to reduce power consumption since MSI is used from that point */
+    __HAL_RCC_HSI_DISABLE();
+}
+
+void adjust_can_clock(can_clock_freq_t freq)
+{
+    hcan1.Init.Mode          = CAN_MODE_NORMAL;
+    hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
+
+    if (freq == SRC_LOW_FREQ_CLK)
+    {
+        hcan1.Init.Prescaler = 1;
+        hcan1.Init.TimeSeg1  = CAN_BS1_2TQ;
+        hcan1.Init.TimeSeg2  = CAN_BS2_1TQ;
+    }
+    else
+    {
+        hcan1.Init.Prescaler = 8;
+        hcan1.Init.TimeSeg1  = CAN_BS1_14TQ;
+        hcan1.Init.TimeSeg2  = CAN_BS2_5TQ;
+    }
+
+    WRITE_REG(hcan1.Instance->BTR, (uint32_t)(hcan1.Init.Mode | hcan1.Init.SyncJumpWidth | hcan1.Init.TimeSeg1 | hcan1.Init.TimeSeg2 | (hcan1.Init.Prescaler - 1U)));
 }
 /* USER CODE END 0 */
 
@@ -431,6 +593,7 @@ static void MX_CAN1_Init(void)
         Error_Handler();
     }
 
+    /* Enable CAN interrupts */
     HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 
     /* USER CODE END CAN1_Init 2 */
@@ -835,13 +998,35 @@ void can_monitor(void *argument)
     UNUSED(argument);
 
     can_message_t msg;
+
+    uint32_t sleep_counter = 0u;
+
+    const uint32_t count_to_sleep_ms = 1000;          // TIME_TO_SLEEP_MS_FROM_MINUTES;
+    assert_param(count_to_sleep_ms <= UINT32_MAX);    // ensure it doesn't overflow
+
+    const uint32_t can_monitor_delay_ms = 10u;
+    osStatus_t     status;
+
     for (;;)
     {
-        if (osMessageQueueGet(CANQueueHandle, &msg, NULL, osWaitForever) == osOK)
+        status = osMessageQueueGet(CANQueueHandle, &msg, NULL, can_monitor_delay_ms);
+
+        if (status == osOK)
         {
+            sleep_counter = 0u;
             can_decode_cmd(&msg);
         }
-        osDelay(pdMS_TO_TICKS(10));
+
+        sleep_counter += can_monitor_delay_ms;    // increment by 10ms
+
+        /* If no CAN messages received for a while, enter sleep mode */
+        if (sleep_counter >= count_to_sleep_ms)
+        {
+            sleep_counter = 0u;
+            enter_sleep_mode();
+        }
+
+        //        osDelay(pdMS_TO_TICKS(can_monitor_delay_ms));
     }
     /* USER CODE END can_monitor */
 }

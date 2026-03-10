@@ -235,6 +235,7 @@ void command_subcommands(uint16_t command)
 void read_cuv_voltages(void)
 {
     uint16_t cells[16] = {0};
+    UNUSED(cells);
 
     subcommands(ADDR_CUV_SNAPSHOT, 0, 0);
 
@@ -414,6 +415,7 @@ void bq769x2_readall_voltages(void)
     int cell_voltage_holder = ADDR_CELL_VOLTAGES;    // Cell 1 Voltage address is 0x14
 
     uint16_t all_voltages[16];
+    UNUSED(all_voltages);
 
     for (int x = 0; x < 16; x++)
     {
