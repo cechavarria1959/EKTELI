@@ -66,6 +66,8 @@ extern "C"
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define RST_SHUT_Pin         GPIO_PIN_0
+#define RST_SHUT_GPIO_Port   GPIOA
 #define CAN_SILENT_Pin       GPIO_PIN_10
 #define CAN_SILENT_GPIO_Port GPIOA
 
