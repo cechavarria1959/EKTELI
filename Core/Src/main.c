@@ -224,16 +224,17 @@ void enter_sleep_mode(void)
     /* Suspend SysTick to avoid waking from tick interrupt */
     __HAL_FLASH_SLEEP_POWERDOWN_ENABLE();
     osKernelLock();
-    HAL_SuspendTick();
     SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
 
     /* Send DEEPSLEEP() twice in a row within 4 seconds */
-    // command_subcommands(ADDR_DEEPSLEEP);
-    // HAL_Delay(100);    // Short delay to ensure the first command is processed
-    // command_subcommands(ADDR_DEEPSLEEP);
-    
+    command_subcommands(ADDR_DEEPSLEEP);
+    HAL_Delay(10);    // Short delay to ensure the first command is processed
+    command_subcommands(ADDR_DEEPSLEEP);
+
     /* Reduce clock and prepare CAN for low-frequency HCLK operation */
     SystemClock_Decrease();
+
+    HAL_SuspendTick();
 
     HAL_CAN_Stop(&hcan1);
 
@@ -248,7 +249,7 @@ void enter_sleep_mode(void)
 
     /* Restore normal run mode, sysclock, CAN peripheral, and systick */
     HAL_PWREx_DisableLowPowerRunMode();
-    
+
     /* 4. Restore system clock (Stop mode resets to MSI) */
     SystemClock_Config();
 
@@ -263,7 +264,7 @@ void enter_sleep_mode(void)
     osKernelUnlock();
 
     /* bms: normal mode (exit_deepsleep) */
-    // command_subcommands(ADDR_EXIT_DEEPSLEEP);
+    command_subcommands(ADDR_EXIT_DEEPSLEEP);
 }
 
 /**
@@ -992,7 +993,7 @@ void can_monitor(void *argument)
 
     uint32_t sleep_counter = 0u;
 
-    const uint32_t count_to_sleep_ms = TIME_TO_SLEEP_MS_FROM_MINUTES;
+    const uint32_t count_to_sleep_ms = 1000;          // TIME_TO_SLEEP_MS_FROM_MINUTES;
     assert_param(count_to_sleep_ms <= UINT32_MAX);    // ensure it doesn't overflow
 
     const uint32_t can_monitor_delay_ms = 10u;
