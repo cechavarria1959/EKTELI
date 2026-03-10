@@ -186,6 +186,14 @@ void transmit_fw_version(void)
 
     /* Transmit on CAN */
     can_msg_transmit(CAN_ID_BMS_FW_VER, buffer, 6, 100u);
+
+    if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) == FW_UPDATE_BYTE_SEQUENCE_1 &&
+        HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) == FW_UPDATE_BYTE_SEQUENCE_2)
+    {
+        /* Reset backup registers */
+        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0x00000000);
+        HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0x00000000);
+    }
 }
 
 
