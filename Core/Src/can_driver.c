@@ -35,7 +35,7 @@ typedef enum
     BMS_MODE_ACTIVE,
     BMS_MODE_SLEEP,
     BMS_MODE_SHUTDOWN,
-    SET_BALANCE
+    SET_NO_BALANCE = 0
 } can_command_t;
 
 
@@ -171,7 +171,7 @@ void can_decode_cmd(can_message_t *msg)
                 cmd = (can_command_t)msg->data[0];
                 can_msg_ack(CAN_ID_BMS_BALANCE, 100u);
                 /*Change Balancing Op.	Off: 0, On: 1*/
-                if(cmd == SET_BALANCE)
+                if(cmd == SET_NO_BALANCE)
                 {
                     subcommands(ADDR_CB_ACTIVE_CELLS, 0, 2);
                 }
