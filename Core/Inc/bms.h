@@ -18,6 +18,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include <stdint.h>
+#include "stm32l4xx_hal.h"
 
 
 /* Exported types ------------------------------------------------------------*/
@@ -486,8 +487,8 @@ typedef struct
 {
     uint16_t ov_threshold_mv;
     uint16_t uv_threshold_mv;
-    int16_t ot_threshold_deg;
-    uint16_t oc_threshold_amp;
+    int8_t ot_threshold_deg;
+    int16_t oc_threshold_camp; //centiampere, i.e. 100 = 1A
 } protection_config_t;
 
 
@@ -513,6 +514,8 @@ typedef struct
 void bms_init(void);
 void bms_dfet_off(void);
 void bms_reset_shutdown(GPIO_PinState state);
+void bms_set_protections(protection_config_t *config);
+void bms_get_protections(protection_config_t *config);
 
 void command_subcommands(uint16_t command);
 void subcommands(uint16_t command, uint16_t data, uint8_t type);

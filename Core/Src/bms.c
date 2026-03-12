@@ -172,19 +172,42 @@ void bms_init()
 
 void bms_set_protections(protection_config_t *config)
 {
+    uint8_t conf_value;
+    
+    command_subcommands(ADDR_SET_CFGUPDATE);
+
     // Set up OV threshold
-    bq769x2_set_register(COV_THRESHOLD, config->ov_threshold_mv / 16, 1);
+    conf_value = (uint8_t)((float)config->ov_threshold_mv / 50.6f);   // convert to register value (50.6mV per bit)
+    bq769x2_set_register(COV_THRESHOLD, conf_value, 1);
 
     // Set up UV threshold
-    bq769x2_set_register(CUV_THRESHOLD, config->uv_threshold_mv / 16, 1);
+    conf_value = (uint8_t)((float)config->uv_threshold_mv / 50.6f);   // convert to register value (50.6mV per bit)
+    bq769x2_set_register(CUV_THRESHOLD, conf_value, 1);
 
     // Set up OT threshold
-    bq769x2_set_register(OTC_THRESHOLD, config->ot_threshold_deg + 40, 1);
+    bq769x2_set_register(OTC_THRESHOLD, config->ot_threshold_deg, 1);
 
     // Set up OC threshold (for charge and discharge)
-    uint8_t occ_threshold = config->oc_threshold_amp / 6;   // convert to register value (6A per bit)
-    bq769x2_set_register(OCC_THRESHOLD, occ_threshold, 1);
-    bq769x2_set_register(OCD1_THRESHOLD, occ_threshold + 8, 1);   // set OCD1 threshold higher than OCC threshold
+    conf_value = config->oc_threshold_camp / 200;
+    bq769x2_set_register(OCC_THRESHOLD, conf_value, 1);
+    bq769x2_set_register(OCD1_THRESHOLD, conf_value * 2, 1);   // set OCD1 threshold higher than OCC threshold
+
+    command_subcommands(ADDR_EXIT_CFGUPDATE);
+}
+
+void bms_get_protections(protection_config_t *config)
+{
+    subcommands(COV_THRESHOLD, 0, R);
+    config->ov_threshold_mv = (uint16_t)((float)rx_32byte[0] * 50.6f);
+
+    subcommands(CUV_THRESHOLD, 0, R);
+    config->uv_threshold_mv = (uint16_t)((float)rx_32byte[0] * 50.6f);
+
+    subcommands(OTC_THRESHOLD, 0, R);
+    config->ot_threshold_deg = (int8_t)rx_32byte[0];
+
+    subcommands(OCC_THRESHOLD, 0, R);
+    config->oc_threshold_camp = rx_32byte[0] * 2 * 100;   // convert register value to centiampere (2A per bit)
 }
 
 /**

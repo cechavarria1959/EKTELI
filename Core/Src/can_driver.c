@@ -25,12 +25,6 @@
 /* Private typedef -----------------------------------------------------------*/
 typedef enum
 {
-    GET_VOLTAGE,
-    GET_CURRENT,
-    GET_SOH,
-    GET_SOC,
-    FW_UPDATE,
-
     BMS_MODE_INACTIVE = 0,
     BMS_MODE_ACTIVE,
     BMS_MODE_SLEEP,
@@ -183,11 +177,18 @@ void can_decode_cmd(can_message_t *msg)
 
             case CAN_ID_BMS_SET_PROTECTIONS:
                 can_msg_ack(CAN_ID_BMS_SET_PROTECTIONS, 100u);
-                /*  0	OV Protection	Set OV in mV
-                    2	UV Protection	Set UV in mV
-                    4	OT Protection	Set OT in degC
-                    5	OC Protection	Set OC in A
-                    */
+
+                protection_config_t config;
+                config.ov_threshold_mv = (msg->data[0] << 8) | msg->data[1];
+                config.uv_threshold_mv = (msg->data[2] << 8) | msg->data[3];
+                config.ot_threshold_deg = (int8_t)(msg->data[4]) - 40; //offset according to CAN message encoding
+                config.oc_threshold_camp = (int16_t)(msg->data[5] << 8) | msg->data[6];
+
+                //TODO: make bound checkings
+
+                osKernelLock();
+                bms_set_protections(&config);
+                osKernelUnlock();
                 break;
 
             case CAN_ID_BMS_RESET:
@@ -217,12 +218,22 @@ void can_decode_cmd(can_message_t *msg)
         switch (msg->header.StdId)
         {
             case CAN_ID_BMS_GET_PROTECTIONS:
-                can_msg_ack(CAN_ID_BMS_PROTECTIONS, 100u);
-                    /*  0	OV Protection	Set OV in mV
-                        2	UV Protection	Set UV in mV
-                        4	OT Protection	Set OT in degC
-                        5	OC Protection	Set OC in A
-                        */
+                protection_config_t config;
+
+                osKernelLock();
+                bms_get_protections(&config);
+                osKernelUnlock();
+
+                uint8_t buffer[7];
+
+                buffer[0] = (config.ov_threshold_mv >> 8) & 0xFF;
+                buffer[1] = config.ov_threshold_mv & 0xFF;
+                buffer[2] = (config.uv_threshold_mv >> 8) & 0xFF;
+                buffer[3] = config.uv_threshold_mv & 0xFF;
+                buffer[4] = (uint8_t)(config.ot_threshold_deg + 40); //offset according to CAN message encoding
+                buffer[5] = (config.oc_threshold_camp >> 8) & 0xFF;
+                buffer[6] = config.oc_threshold_camp & 0xFF;
+                can_msg_transmit(CAN_ID_BMS_PROTECTIONS, buffer, 7, 100u);
                 break;
 
             case CAN_ID_BMS_GET_FAULTS:
