@@ -164,10 +164,27 @@ void bms_init()
     // Set OTC recovery at 45degC
     bq769x2_set_register(OTC_RECOVERY, 0x2D, 1);
 
-    // Set UTD at -20degC
-    // bq769x2_set_register(UTD_THRESHOLD, 0xEC, 1); // Disabled for further data format correctness
+    // Adjust Sleep current threshold to 150mA
+    bq769x2_set_register(SLEEP_CURRENT, 150, 2);
 
     command_subcommands(ADDR_EXIT_CFGUPDATE);
+}
+
+void bms_set_protections(protection_config_t *config)
+{
+    // Set up OV threshold
+    bq769x2_set_register(COV_THRESHOLD, config->ov_threshold_mv / 16, 1);
+
+    // Set up UV threshold
+    bq769x2_set_register(CUV_THRESHOLD, config->uv_threshold_mv / 16, 1);
+
+    // Set up OT threshold
+    bq769x2_set_register(OTC_THRESHOLD, config->ot_threshold_deg + 40, 1);
+
+    // Set up OC threshold (for charge and discharge)
+    uint8_t occ_threshold = config->oc_threshold_amp / 6;   // convert to register value (6A per bit)
+    bq769x2_set_register(OCC_THRESHOLD, occ_threshold, 1);
+    bq769x2_set_register(OCD1_THRESHOLD, occ_threshold + 8, 1);   // set OCD1 threshold higher than OCC threshold
 }
 
 /**
@@ -871,8 +888,9 @@ void bms_dfet_off(void)
  * oscillators, the REG18 LDO, the on-chip preregulator, and the REG1 and
  * REG2 LDOs, preregulator, and the REG1 and REG2 LDOs.
  */
-void bms_reset_shutdown(void)
+void bms_reset_shutdown(GPIO_PinState state)
 {
+    HAL_GPIO_WritePin(RST_SHUT_GPIO_Port, RST_SHUT_Pin, state);
 }
 
 

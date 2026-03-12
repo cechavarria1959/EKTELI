@@ -482,6 +482,15 @@ typedef enum
     BMS_CMD_NONE = 0
 } bms_command_t;
 
+typedef struct
+{
+    uint16_t ov_threshold_mv;
+    uint16_t uv_threshold_mv;
+    int16_t ot_threshold_deg;
+    uint16_t oc_threshold_amp;
+} protection_config_t;
+
+
 /* Exported constants and defines --------------------------------------------*/
 /** @brief BMS Model Selection */
 #if defined(BMS_MODEL_10S)
@@ -503,7 +512,7 @@ typedef enum
 /* Exported function prototypes ----------------------------------------------*/
 void bms_init(void);
 void bms_dfet_off(void);
-void bms_reset_shutdown(void);
+void bms_reset_shutdown(GPIO_PinState state);
 
 void command_subcommands(uint16_t command);
 void subcommands(uint16_t command, uint16_t data, uint8_t type);

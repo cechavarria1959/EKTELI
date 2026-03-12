@@ -61,6 +61,7 @@ extern "C"
 
     /* USER CODE BEGIN EFP */
     void transmit_fw_version(void);
+    void enter_sleep_mode(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
