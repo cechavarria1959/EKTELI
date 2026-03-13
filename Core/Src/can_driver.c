@@ -154,6 +154,7 @@ void can_decode_cmd(can_message_t *msg)
                     case BMS_MODE_SHUTDOWN:
                         bms_reset_shutdown(GPIO_PIN_SET);
                         /* After 1s device should enter shutdown mode */
+                        /* For restart, a charger must be connected to BMS Output connection */
                         break;
 
                     default:
