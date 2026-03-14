@@ -147,7 +147,6 @@ void        can_monitor(void *argument);
 void        bms_main_task(void *argument);
 
 /* USER CODE BEGIN PFP */
-void enter_sleep_mode(void);
 void SystemClock_Decrease(void);
 void adjust_can_clock(can_clock_freq_t freq);
 /* USER CODE END PFP */
@@ -404,6 +403,7 @@ int main(void)
     subcommands(ADDR_DEVICE_NUMBER, 0, 0);
     direct_commands(ADDR_BATTERY_STATUS, 0, 0);    // read
     direct_commands(ADDR_ALARM_RAW_STATUS, 0, 0);
+    subcommands(ADDR_CB_SET_LVL1, 0, 0);
     HAL_Delay(60);
 
     bms_otp_status_t otp_status = bms_otp_check();
