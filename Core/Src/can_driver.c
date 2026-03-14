@@ -172,7 +172,8 @@ void can_decode_cmd(can_message_t *msg)
                 }
                 else
                 {
-                    subcommands(ADDR_CB_SET_LVL1, 3276, 2); //to check
+                    // setting default value for Settings:Cell Balancing Config:Cell Balance Min Cell V
+                    subcommands(ADDR_CB_SET_LVL1, 3900, 2);
                 }
                 break;
 
