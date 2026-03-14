@@ -487,8 +487,8 @@ typedef struct
 {
     uint16_t ov_threshold_mv;
     uint16_t uv_threshold_mv;
-    int8_t ot_threshold_deg;
-    int16_t oc_threshold_camp; //centiampere, i.e. 100 = 1A
+    int8_t   ot_threshold_deg;
+    int16_t  oc_threshold_camp;    // centiampere, i.e. 100 = 1A
 } protection_config_t;
 
 

@@ -173,15 +173,15 @@ void bms_init()
 void bms_set_protections(protection_config_t *config)
 {
     uint8_t conf_value;
-    
+
     command_subcommands(ADDR_SET_CFGUPDATE);
 
     // Set up OV threshold
-    conf_value = (uint8_t)((float)config->ov_threshold_mv / 50.6f);   // convert to register value (50.6mV per bit)
+    conf_value = (uint8_t)((float)config->ov_threshold_mv / 50.6f);    // convert to register value (50.6mV per bit)
     bq769x2_set_register(COV_THRESHOLD, conf_value, 1);
 
     // Set up UV threshold
-    conf_value = (uint8_t)((float)config->uv_threshold_mv / 50.6f);   // convert to register value (50.6mV per bit)
+    conf_value = (uint8_t)((float)config->uv_threshold_mv / 50.6f);    // convert to register value (50.6mV per bit)
     bq769x2_set_register(CUV_THRESHOLD, conf_value, 1);
 
     // Set up OT threshold
@@ -190,7 +190,7 @@ void bms_set_protections(protection_config_t *config)
     // Set up OC threshold (for charge and discharge)
     conf_value = config->oc_threshold_camp / 200;
     bq769x2_set_register(OCC_THRESHOLD, conf_value, 1);
-    bq769x2_set_register(OCD1_THRESHOLD, conf_value * 2, 1);   // set OCD1 threshold higher than OCC threshold
+    bq769x2_set_register(OCD1_THRESHOLD, conf_value * 2, 1);    // set OCD1 threshold higher than OCC threshold
 
     command_subcommands(ADDR_EXIT_CFGUPDATE);
 }
@@ -207,7 +207,7 @@ void bms_get_protections(protection_config_t *config)
     config->ot_threshold_deg = (int8_t)rx_32byte[0];
 
     subcommands(OCC_THRESHOLD, 0, R);
-    config->oc_threshold_camp = rx_32byte[0] * 2 * 100;   // convert register value to centiampere (2A per bit)
+    config->oc_threshold_camp = rx_32byte[0] * 2 * 100;    // convert register value to centiampere (2A per bit)
 }
 
 /**
